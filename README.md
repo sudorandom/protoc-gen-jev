@@ -1,11 +1,42 @@
 # protoc-gen-jev
 
+[![Latest Release](https://img.shields.io/github/v/release/sudorandom/protoc-gen-jev?logo=github&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/releases/latest)
+[![Go CI](https://img.shields.io/github/actions/workflow/status/sudorandom/protoc-gen-jev/go.yml?label=Go%20CI&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/actions/workflows/go.yml)
+[![Buf CI](https://img.shields.io/github/actions/workflow/status/sudorandom/protoc-gen-jev/buf.yml?label=Buf%20CI&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/actions/workflows/buf.yml)
+[![Release](https://img.shields.io/github/actions/workflow/status/sudorandom/protoc-gen-jev/publish.yml?label=Release&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/actions/workflows/publish.yml)
+
 > [!WARNING]
 > **Experimental**: `protoc-gen-jev` is currently experimental and under active development. APIs, question schema formats, and generated code templates are subject to change without notice.
 
 A Protobuf compiler plugin for **TypeSafe AI's Jev** (System One fast cognitive model).
 
 `protoc-gen-jev` inspects Protobuf messages and automatically generates typed Jev client code, question schemas, and decision structures across multiple languages.
+
+## Installation
+
+### Via `go install` (Recommended)
+
+Install the latest plugin binary directly using Go:
+
+```bash
+go install github.com/sudorandom/protoc-gen-jev@latest
+```
+
+Make sure `$GOPATH/bin` (typically `~/go/bin`) is in your system `PATH`:
+
+```bash
+export PATH="$HOME/go/bin:$PATH"
+```
+
+### Pre-built Binaries (GitHub Releases)
+
+Pre-compiled binaries for Linux, macOS, and Windows are available on the [GitHub Releases](https://github.com/sudorandom/protoc-gen-jev/releases/latest) page.
+
+Verify that the plugin is available:
+
+```bash
+protoc-gen-jev -version
+```
 
 ## Generated Targets
 
@@ -20,7 +51,7 @@ A Protobuf compiler plugin for **TypeSafe AI's Jev** (System One fast cognitive 
 
 ### 1. Depend on `jev/v1/options.proto`
 
-To import `jev/v1/options.proto` into your schemas, add the dependency to your `buf.yaml` (see [`examples/buf.yaml`](examples/buf.yaml)):
+To import `jev/v1/options.proto` into your schemas, add the dependency to your `buf.yaml` (see [`examples/buf.yaml.example`](examples/buf.yaml.example)):
 
 ```yaml
 version: v2

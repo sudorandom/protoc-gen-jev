@@ -3,6 +3,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"os"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -12,7 +14,14 @@ import (
 	"github.com/sudorandom/protoc-gen-jev/internal/parser"
 )
 
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "-v") {
+		fmt.Printf("protoc-gen-jev %s\n", version)
+		return
+	}
+
 	var flags flag.FlagSet
 	targetOpt := flags.String("target", "all", "Target languages to generate: go, ts, python, json, all")
 	targetsOpt := flags.String("targets", "", "Alias for target")
