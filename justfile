@@ -78,7 +78,7 @@ clean-golden:
 # ------------------------------------------------------------------------------
 
 # Run all linters
-lint:
+lint: generate
 	@echo "Linting protobuf files..."
 	buf lint
 	@echo "Running go vet..."
