@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 
-	rulesv1 "protoc-gen-jev/gen/jev/ai/rules/v1"
+	rulesv1 "github.com/sudorandom/protoc-gen-jev/gen/jev/ai/rules/v1"
 )
 
 func main() {

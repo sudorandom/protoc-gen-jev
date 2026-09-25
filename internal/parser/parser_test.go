@@ -3,8 +3,8 @@ package parser_test
 import (
 	"testing"
 
-	"protoc-gen-jev/internal/model"
-	"protoc-gen-jev/internal/parser"
+	"github.com/sudorandom/protoc-gen-jev/internal/model"
+	"github.com/sudorandom/protoc-gen-jev/internal/parser"
 )
 
 func TestCleanComments(t *testing.T) {

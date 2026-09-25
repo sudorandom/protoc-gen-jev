@@ -5,7 +5,7 @@ package jev.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "protoc-gen-jev/pkg/jev/v1;jevv1";
+option go_package = "github.com/sudorandom/protoc-gen-jev/pkg/jev/v1;jevv1";
 
 extend google.protobuf.FieldOptions {
   FieldOptions field = 50001;

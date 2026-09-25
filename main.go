@@ -7,9 +7,9 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
 
-	"protoc-gen-jev/internal/codegen"
-	"protoc-gen-jev/internal/model"
-	"protoc-gen-jev/internal/parser"
+	"github.com/sudorandom/protoc-gen-jev/internal/codegen"
+	"github.com/sudorandom/protoc-gen-jev/internal/model"
+	"github.com/sudorandom/protoc-gen-jev/internal/parser"
 )
 
 func main() {

@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 
-	"protoc-gen-jev/internal/model"
+	"github.com/sudorandom/protoc-gen-jev/internal/model"
 )
 
 // GenerateTypeScript writes TypeScript client classes into <file>_jev.ts.

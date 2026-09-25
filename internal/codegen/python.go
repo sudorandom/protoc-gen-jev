@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 
-	"protoc-gen-jev/internal/model"
+	"github.com/sudorandom/protoc-gen-jev/internal/model"
 )
 
 // GeneratePython writes Python client classes into <file>_jev.py.

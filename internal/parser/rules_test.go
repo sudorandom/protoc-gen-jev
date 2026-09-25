@@ -6,7 +6,7 @@ import (
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 
-	jevv1 "protoc-gen-jev/pkg/jev/v1"
+	jevv1 "github.com/sudorandom/protoc-gen-jev/pkg/jev/v1"
 )
 
 func TestResolveIntCriteria(t *testing.T) {

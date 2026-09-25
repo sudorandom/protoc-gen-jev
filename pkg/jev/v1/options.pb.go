@@ -4,6 +4,8 @@
 // 	protoc        (unknown)
 // source: jev/v1/options.proto
 
+// Experimental: Field options for mapping Protobuf fields to TypeSafe AI's Jev cognitive questions.
+
 package jevv1
 
 import (
@@ -145,7 +147,7 @@ const file_jev_v1_options_proto_rawDesc = "" +
 	"\rCriteriaEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01:K\n" +
-	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\v2\x14.jev.v1.FieldOptionsR\x05fieldB!Z\x1fprotoc-gen-jev/gen/jev/v1;jevv1b\x06proto3"
+	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\v2\x14.jev.v1.FieldOptionsR\x05fieldB7Z5github.com/sudorandom/protoc-gen-jev/pkg/jev/v1;jevv1b\x06proto3"
 
 var (
 	file_jev_v1_options_proto_rawDescOnce sync.Once

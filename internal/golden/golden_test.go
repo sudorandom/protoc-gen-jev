@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"protoc-gen-jev/internal/golden"
+	"github.com/sudorandom/protoc-gen-jev/internal/golden"
 )
 
 func TestGoldenOutputs(t *testing.T) {
