@@ -86,10 +86,18 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 
 		goFieldName := ToPascalCase(desc.JSONName())
 
-		// 4. Map Protobuf kind and jev.v1.field options to Jev primitive
-		switch desc.Kind() {
-		case protoreflect.EnumKind:
-			criteria := resolveEnumCriteria(desc.Enum(), jevOpt)
+		// 4. Explicit primitive overrides or natural Protobuf kind mapping
+		var choiceRule *jevv1.ChoiceRules
+		var scoreRule *jevv1.ScoreRules
+		var noulRule *jevv1.NoulRules
+		if jevOpt != nil {
+			choiceRule = jevOpt.GetChoice()
+			scoreRule = jevOpt.GetScore()
+			noulRule = jevOpt.GetNoul()
+		}
+
+		if choiceRule != nil {
+			criteria := resolveExplicitChoiceCriteria(desc, choiceRule)
 			if len(criteria) > 0 {
 				spec.Questions[desc.JSONName()] = model.Question{
 					Type:         model.TypeChoice,
@@ -101,22 +109,29 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 				}
 				spec.Order = append(spec.Order, desc.JSONName())
 			}
+			continue
+		}
 
-		case protoreflect.StringKind:
-			criteria := resolveStringCriteria(desc, jevOpt)
-			if len(criteria) > 0 {
-				spec.Questions[desc.JSONName()] = model.Question{
-					Type:         model.TypeChoice,
-					Instructions: instructions,
-					Criteria:     criteria,
-					ProtoField:   string(desc.Name()),
-					JSONField:    desc.JSONName(),
-					GoField:      goFieldName,
-				}
-				spec.Order = append(spec.Order, desc.JSONName())
+		if scoreRule != nil {
+			var criteria []string
+			if isIntegerKind(desc.Kind()) {
+				criteria = resolveIntCriteria(desc, scoreRule)
+			} else {
+				criteria = resolveFloatCriteria(desc, scoreRule)
 			}
+			spec.Questions[desc.JSONName()] = model.Question{
+				Type:         model.TypeScore,
+				Instructions: instructions,
+				Criteria:     criteria,
+				ProtoField:   string(desc.Name()),
+				JSONField:    desc.JSONName(),
+				GoField:      goFieldName,
+			}
+			spec.Order = append(spec.Order, desc.JSONName())
+			continue
+		}
 
-		case protoreflect.BoolKind:
+		if noulRule != nil || desc.Kind() == protoreflect.BoolKind {
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeNoul,
 				Instructions: instructions,
@@ -125,9 +140,27 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 				GoField:      goFieldName,
 			}
 			spec.Order = append(spec.Order, desc.JSONName())
+			continue
+		}
+
+		// 5. Default mapping based on Protobuf kind
+		switch desc.Kind() {
+		case protoreflect.EnumKind:
+			criteria := resolveEnumCriteria(desc.Enum(), nil)
+			if len(criteria) > 0 {
+				spec.Questions[desc.JSONName()] = model.Question{
+					Type:         model.TypeChoice,
+					Instructions: instructions,
+					Criteria:     criteria,
+					ProtoField:   string(desc.Name()),
+					JSONField:    desc.JSONName(),
+					GoField:      goFieldName,
+				}
+				spec.Order = append(spec.Order, desc.JSONName())
+			}
 
 		case protoreflect.FloatKind, protoreflect.DoubleKind:
-			criteria := resolveFloatCriteria(desc, jevOpt)
+			criteria := resolveFloatCriteria(desc, nil)
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeScore,
 				Instructions: instructions,
@@ -141,7 +174,7 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 		case protoreflect.Int32Kind, protoreflect.Int64Kind,
 			protoreflect.Sint32Kind, protoreflect.Sint64Kind,
 			protoreflect.Uint32Kind, protoreflect.Uint64Kind:
-			criteria := resolveIntCriteria(desc, jevOpt)
+			criteria := resolveIntCriteria(desc, nil)
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeScore,
 				Instructions: instructions,
@@ -157,19 +190,30 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 	return spec
 }
 
-// resolveEnumCriteria respects jev.v1.field choices, not_in, and criteria options.
-func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, opt *jevv1.FieldOptions) map[string]any {
+func isIntegerKind(k protoreflect.Kind) bool {
+	switch k {
+	case protoreflect.Int32Kind, protoreflect.Int64Kind,
+		protoreflect.Sint32Kind, protoreflect.Sint64Kind,
+		protoreflect.Uint32Kind, protoreflect.Uint64Kind:
+		return true
+	default:
+		return false
+	}
+}
+
+// resolveEnumCriteria respects choice.choices, choice.not_in, and choice.criteria options.
+func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, rule *jevv1.ChoiceRules) map[string]any {
 	var choicesMap, notInMap map[string]bool
-	if opt != nil {
-		if len(opt.GetChoices()) > 0 {
+	if rule != nil {
+		if len(rule.GetChoices()) > 0 {
 			choicesMap = make(map[string]bool)
-			for _, v := range opt.GetChoices() {
+			for _, v := range rule.GetChoices() {
 				choicesMap[v] = true
 			}
 		}
-		if len(opt.GetNotIn()) > 0 {
+		if len(rule.GetNotIn()) > 0 {
 			notInMap = make(map[string]bool)
-			for _, v := range opt.GetNotIn() {
+			for _, v := range rule.GetNotIn() {
 				notInMap[v] = true
 			}
 		}
@@ -194,8 +238,8 @@ func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, opt *jevv1.FieldO
 	}
 
 	// Jev options criteria overrides or supplements
-	if opt != nil && len(opt.GetCriteria()) > 0 {
-		for k := range opt.GetCriteria() {
+	if rule != nil && len(rule.GetCriteria()) > 0 {
+		for k := range rule.GetCriteria() {
 			criteria[k] = nil
 		}
 	}
@@ -204,27 +248,35 @@ func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, opt *jevv1.FieldO
 }
 
 // resolveStringCriteria maps string fields to Choice when discrete values or criteria are configured.
-func resolveStringCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptions) map[string]any {
+func resolveStringCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.ChoiceRules) map[string]any {
 	criteria := make(map[string]any)
-	if opt == nil {
+	if rule == nil {
 		return criteria
 	}
 
-	for _, val := range opt.GetChoices() {
+	for _, val := range rule.GetChoices() {
 		criteria[val] = nil
 	}
-	for k := range opt.GetCriteria() {
+	for k := range rule.GetCriteria() {
 		criteria[k] = nil
 	}
 
 	return criteria
 }
 
-// resolveIntCriteria calculates dynamic rubrics from scale, or min/max bounds.
-func resolveIntCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptions) []string {
-	if opt != nil && len(opt.GetScale()) > 0 {
+// resolveExplicitChoiceCriteria handles fields explicitly configured with choice: { ... }.
+func resolveExplicitChoiceCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.ChoiceRules) map[string]any {
+	if desc.Kind() == protoreflect.EnumKind {
+		return resolveEnumCriteria(desc.Enum(), rule)
+	}
+	return resolveStringCriteria(desc, rule)
+}
+
+// resolveIntCriteria calculates dynamic rubrics from score.scale, or score.min/max bounds.
+func resolveIntCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.ScoreRules) []string {
+	if rule != nil && len(rule.GetScale()) > 0 {
 		var res []string
-		for _, v := range opt.GetScale() {
+		for _, v := range rule.GetScale() {
 			res = append(res, strconv.FormatInt(int64(v), 10))
 		}
 		return res
@@ -232,11 +284,11 @@ func resolveIntCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptio
 
 	var hasMin, hasMax bool
 	var minVal, maxVal int64
-	if opt != nil && (opt.Min != 0 || opt.Max != 0) {
+	if rule != nil && (rule.Min != 0 || rule.Max != 0) {
 		hasMin = true
 		hasMax = true
-		minVal = int64(opt.Min)
-		maxVal = int64(opt.Max)
+		minVal = int64(rule.Min)
+		maxVal = int64(rule.Max)
 	}
 
 	if hasMin && hasMax && maxVal >= minVal {
@@ -261,11 +313,11 @@ func resolveIntCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptio
 	return []string{"1", "2", "3", "4", "5"}
 }
 
-// resolveFloatCriteria calculates dynamic rubrics from scale, or min/max bounds.
-func resolveFloatCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptions) []string {
-	if opt != nil && len(opt.GetScale()) > 0 {
+// resolveFloatCriteria calculates dynamic rubrics from score.scale, or score.min/max bounds.
+func resolveFloatCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.ScoreRules) []string {
+	if rule != nil && len(rule.GetScale()) > 0 {
 		var res []string
-		for _, v := range opt.GetScale() {
+		for _, v := range rule.GetScale() {
 			res = append(res, formatFloat(float64(v)))
 		}
 		return res
@@ -273,11 +325,11 @@ func resolveFloatCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOpt
 
 	var hasMin, hasMax bool
 	var minVal, maxVal float64
-	if opt != nil && (opt.Min != 0 || opt.Max != 0) {
+	if rule != nil && (rule.Min != 0 || rule.Max != 0) {
 		hasMin = true
 		hasMax = true
-		minVal = float64(opt.Min)
-		maxVal = float64(opt.Max)
+		minVal = float64(rule.Min)
+		maxVal = float64(rule.Max)
 	}
 
 	if hasMin && hasMax && maxVal >= minVal {

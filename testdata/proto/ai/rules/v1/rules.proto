@@ -27,78 +27,90 @@ message RuleTestRecord {
 
   // 3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]
   Mode execution_mode = 5 [
-    (jev.v1.field).choices = "MODE_FAST",
-    (jev.v1.field).choices = "MODE_BALANCED"
+    (jev.v1.field).choice = {
+      choices: ["MODE_FAST", "MODE_BALANCED"]
+    }
   ];
 
   // 4. Enum restricted by not_in -> Choice omitting MODE_DEBUG
   Mode filtered_mode = 6 [
-    (jev.v1.field).not_in = "MODE_DEBUG"
+    (jev.v1.field).choice = {
+      not_in: ["MODE_DEBUG"]
+    }
   ];
 
   // 5. Integer with small range (<= 10) -> exact sequence [1..5]
   int32 rating_small = 7 [
-    (jev.v1.field).min = 1,
-    (jev.v1.field).max = 5
+    (jev.v1.field).score = {
+      min: 1,
+      max: 5
+    }
   ];
 
   // 6. Integer with explicit scale -> [1, 2, 3]
   int32 rating_strict = 8 [
-    (jev.v1.field).scale = 1,
-    (jev.v1.field).scale = 2,
-    (jev.v1.field).scale = 3
+    (jev.v1.field).score = {
+      scale: [1, 2, 3]
+    }
   ];
 
   // 7. Integer with discrete allowed values -> ["10", "20", "50", "100"]
   int32 discrete_code = 9 [
-    (jev.v1.field).scale = 10,
-    (jev.v1.field).scale = 20,
-    (jev.v1.field).scale = 50,
-    (jev.v1.field).scale = 100
+    (jev.v1.field).score = {
+      scale: [10, 20, 50, 100]
+    }
   ];
 
   // 8. Large integer range -> 5-tier interpolated rubric [0, 250, 500, 750, 1000]
   int64 large_scale = 10 [
-    (jev.v1.field).min = 0,
-    (jev.v1.field).max = 1000
+    (jev.v1.field).score = {
+      min: 0,
+      max: 1000
+    }
   ];
 
   // 9. Float continuous range -> 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]
   float temperature = 11 [
-    (jev.v1.field).min = -40.0,
-    (jev.v1.field).max = 60.0
+    (jev.v1.field).score = {
+      min: -40.0,
+      max: 60.0
+    }
   ];
 
   // 10. Float discrete values -> ["0.2", "0.5", "0.8"]
   float discrete_ratio = 12 [
-    (jev.v1.field).scale = 0.2,
-    (jev.v1.field).scale = 0.5,
-    (jev.v1.field).scale = 0.8
+    (jev.v1.field).score = {
+      scale: [0.2, 0.5, 0.8]
+    }
   ];
 
   // 11. String with allowed set of values -> Choice
   string security_clearance = 13 [
-    (jev.v1.field).choices = "PUBLIC",
-    (jev.v1.field).choices = "SECRET",
-    (jev.v1.field).choices = "TOP_SECRET"
+    (jev.v1.field).choice = {
+      choices: ["PUBLIC", "SECRET", "TOP_SECRET"]
+    }
   ];
 
   // 12. String with custom Jev criteria options -> Choice
   string decision_flag = 14 [
-    (jev.v1.field).criteria = {
-      key: "APPROVE",
-      value: "Request approved"
-    },
-    (jev.v1.field).criteria = {
-      key: "REJECT",
-      value: "Request rejected"
+    (jev.v1.field).choice = {
+      criteria: {
+        key: "APPROVE",
+        value: "Request approved"
+      },
+      criteria: {
+        key: "REJECT",
+        value: "Request rejected"
+      }
     }
   ];
 
   // 13. Float with custom Jev min/max options -> [10.0, 20.0, 30.0, 40.0, 50.0]
   float custom_bounded_score = 15 [
-    (jev.v1.field).min = 10,
-    (jev.v1.field).max = 50
+    (jev.v1.field).score = {
+      min: 10,
+      max: 50
+    }
   ];
 
   // 14. Explicitly skipped field -> MUST NOT appear in questions

@@ -11,17 +11,17 @@ import (
 func TestResolveIntCriteria(t *testing.T) {
 	tests := []struct {
 		name     string
-		opt      *jevv1.FieldOptions
+		rule     *jevv1.ScoreRules
 		expected []string
 	}{
 		{
-			name:     "default fallback without options",
-			opt:      nil,
+			name:     "default fallback without score rules",
+			rule:     nil,
 			expected: []string{"1", "2", "3", "4", "5"},
 		},
 		{
 			name: "small range exact sequence (1..5)",
-			opt: &jevv1.FieldOptions{
+			rule: &jevv1.ScoreRules{
 				Min: 1,
 				Max: 5,
 			},
@@ -29,7 +29,7 @@ func TestResolveIntCriteria(t *testing.T) {
 		},
 		{
 			name: "explicit discrete scale takes priority",
-			opt: &jevv1.FieldOptions{
+			rule: &jevv1.ScoreRules{
 				Scale: []float32{10, 20, 50, 100},
 				Min:   1,
 				Max:   100,
@@ -38,15 +38,15 @@ func TestResolveIntCriteria(t *testing.T) {
 		},
 		{
 			name: "large integer range 5-tier interpolated rubric (0..1000)",
-			opt: &jevv1.FieldOptions{
+			rule: &jevv1.ScoreRules{
 				Min: 0,
 				Max: 1000,
 			},
 			expected: []string{"0", "250", "500", "750", "1000"},
 		},
 		{
-			name: "custom Jev options min/max override (10..50)",
-			opt: &jevv1.FieldOptions{
+			name: "custom Jev score min/max override (10..50)",
+			rule: &jevv1.ScoreRules{
 				Min: 10,
 				Max: 50,
 			},
@@ -56,7 +56,7 @@ func TestResolveIntCriteria(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveIntCriteria(nil, tt.opt)
+			got := resolveIntCriteria(nil, tt.rule)
 			assert.Equal(t, tt.expected, got)
 		})
 	}
@@ -65,17 +65,17 @@ func TestResolveIntCriteria(t *testing.T) {
 func TestResolveFloatCriteria(t *testing.T) {
 	tests := []struct {
 		name     string
-		opt      *jevv1.FieldOptions
+		rule     *jevv1.ScoreRules
 		expected []string
 	}{
 		{
 			name:     "default fallback continuous rubric (0.0..1.0)",
-			opt:      nil,
+			rule:     nil,
 			expected: []string{"0.0", "0.25", "0.5", "0.75", "1.0"},
 		},
 		{
 			name: "continuous range interpolation (-40.0..60.0)",
-			opt: &jevv1.FieldOptions{
+			rule: &jevv1.ScoreRules{
 				Min: -40.0,
 				Max: 60.0,
 			},
@@ -83,7 +83,7 @@ func TestResolveFloatCriteria(t *testing.T) {
 		},
 		{
 			name: "discrete float scale takes priority",
-			opt: &jevv1.FieldOptions{
+			rule: &jevv1.ScoreRules{
 				Scale: []float32{0.2, 0.5, 0.8},
 				Min:   0.0,
 				Max:   1.0,
@@ -91,8 +91,8 @@ func TestResolveFloatCriteria(t *testing.T) {
 			expected: []string{"0.2", "0.5", "0.8"},
 		},
 		{
-			name: "custom Jev options min/max bounds (0.0..50.0)",
-			opt: &jevv1.FieldOptions{
+			name: "custom Jev score min/max bounds (0.0..50.0)",
+			rule: &jevv1.ScoreRules{
 				Min: 0.0,
 				Max: 50.0,
 			},
@@ -102,7 +102,7 @@ func TestResolveFloatCriteria(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveFloatCriteria(nil, tt.opt)
+			got := resolveFloatCriteria(nil, tt.rule)
 			assert.Equal(t, tt.expected, got)
 		})
 	}
@@ -111,17 +111,17 @@ func TestResolveFloatCriteria(t *testing.T) {
 func TestResolveStringCriteria(t *testing.T) {
 	tests := []struct {
 		name     string
-		opt      *jevv1.FieldOptions
+		rule     *jevv1.ChoiceRules
 		expected map[string]any
 	}{
 		{
-			name:     "empty without options",
-			opt:      nil,
+			name:     "empty without choice rules",
+			rule:     nil,
 			expected: map[string]any{},
 		},
 		{
 			name: "jev choices whitelist",
-			opt: &jevv1.FieldOptions{
+			rule: &jevv1.ChoiceRules{
 				Choices: []string{"PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII"},
 			},
 			expected: map[string]any{
@@ -132,7 +132,7 @@ func TestResolveStringCriteria(t *testing.T) {
 		},
 		{
 			name: "custom jev criteria options",
-			opt: &jevv1.FieldOptions{
+			rule: &jevv1.ChoiceRules{
 				Criteria: map[string]string{
 					"APPROVE": "Request approved",
 					"REJECT":  "Request rejected",
@@ -147,7 +147,7 @@ func TestResolveStringCriteria(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveStringCriteria(nil, tt.opt)
+			got := resolveStringCriteria(nil, tt.rule)
 			assert.Equal(t, tt.expected, got)
 		})
 	}

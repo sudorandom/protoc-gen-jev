@@ -31,20 +31,26 @@ message ComprehensiveRecord {
 
   // --- Numeric validation variants ---
   int32 score_int = 6 [
-    (jev.v1.field).min = 1,
-    (jev.v1.field).max = 100
+    (jev.v1.field).score = {
+      min: 1,
+      max: 100
+    }
   ];
 
   int64 big_count = 7;
 
   float ratio = 8 [
-    (jev.v1.field).min = 0.0,
-    (jev.v1.field).max = 1.0
+    (jev.v1.field).score = {
+      min: 0.0,
+      max: 1.0
+    }
   ];
 
   double latitude = 9 [
-    (jev.v1.field).min = -90.0,
-    (jev.v1.field).max = 90.0
+    (jev.v1.field).score = {
+      min: -90.0,
+      max: 90.0
+    }
   ];
 
   // --- Boolean & Enum ---
@@ -80,8 +86,8 @@ message ComprehensiveRecord {
 
   // Discrete string choices via Jev options
   string account_tier = 20 [
-    (jev.v1.field).choices = "TIER_STANDARD",
-    (jev.v1.field).choices = "TIER_PREMIUM",
-    (jev.v1.field).choices = "TIER_ENTERPRISE"
+    (jev.v1.field).choice = {
+      choices: ["TIER_STANDARD", "TIER_PREMIUM", "TIER_ENTERPRISE"]
+    }
   ];
 }

@@ -27,51 +27,50 @@ message IncidentTriage {
   // Evaluates binary intent with a calibrated confidence threshold (0.0 - 1.0).
   bool requires_immediate_paging = 4 [
     (jev.v1.field).instructions = "Does this incident indicate active user-facing outage requiring paging?",
-    (jev.v1.field).threshold = 0.85
+    (jev.v1.field).noul = { threshold: 0.85 }
   ];
 
   // 3. Enum field with criteria guidance -> Jev Choice question
   PriorityLevel priority = 5 [
     (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_CRITICAL",
-      value: "Complete service outage affecting >10% of traffic"
-    },
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_HIGH",
-      value: "Significant latency spike or core feature degradation"
-    },
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_MEDIUM",
-      value: "Isolated component failure with working fallback"
-    },
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_LOW",
-      value: "Minor cosmetic or non-customer-impacting bug"
+    (jev.v1.field).choice = {
+      criteria: {
+        key: "PRIORITY_LEVEL_CRITICAL",
+        value: "Complete service outage affecting >10% of traffic"
+      },
+      criteria: {
+        key: "PRIORITY_LEVEL_HIGH",
+        value: "Significant latency spike or core feature degradation"
+      },
+      criteria: {
+        key: "PRIORITY_LEVEL_MEDIUM",
+        value: "Isolated component failure with working fallback"
+      },
+      criteria: {
+        key: "PRIORITY_LEVEL_LOW",
+        value: "Minor cosmetic or non-customer-impacting bug"
+      }
     }
   ];
 
   // 4. Bounded integer range (<= 10) -> Jev Score with exact sequence rubric [1, 2, 3, 4, 5]
   int32 urgency_rating = 6 [
-    (jev.v1.field).min = 1,
-    (jev.v1.field).max = 5,
-    (jev.v1.field).instructions = "How urgently does this issue need to be resolved?"
+    (jev.v1.field).instructions = "How urgently does this issue need to be resolved?",
+    (jev.v1.field).score = { min: 1, max: 5 }
   ];
 
   // 5. Continuous numeric scale -> Jev Score with 5-tier interpolated rubric [0.0, 25.0, 50.0, 75.0, 100.0]
   float blast_radius_percentage = 7 [
     (jev.v1.field).instructions = "Estimated percentage of production infrastructure impacted",
-    (jev.v1.field).min = 0.0,
-    (jev.v1.field).max = 100.0
+    (jev.v1.field).score = { min: 0.0, max: 100.0 }
   ];
 
   // 6. String with discrete allowed choices -> Jev Choice question
   string compliance_classification = 8 [
-    (jev.v1.field).choices = "PUBLIC",
-    (jev.v1.field).choices = "INTERNAL_CONFIDENTIAL",
-    (jev.v1.field).choices = "RESTRICTED_PII",
-    (jev.v1.field).choices = "PCI_DSS",
-    (jev.v1.field).instructions = "Categorize any sensitive or regulated data exposed in the incident report"
+    (jev.v1.field).instructions = "Categorize any sensitive or regulated data exposed in the incident report",
+    (jev.v1.field).choice = {
+      choices: ["PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII", "PCI_DSS"]
+    }
   ];
 
   // 7. Skipped fields -> Excluded from Jev decision payload

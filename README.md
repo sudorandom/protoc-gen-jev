@@ -84,51 +84,50 @@ message IncidentTriage {
   // Evaluates binary intent with a calibrated confidence threshold (0.0 - 1.0).
   bool requires_immediate_paging = 4 [
     (jev.v1.field).instructions = "Does this incident indicate active user-facing outage requiring paging?",
-    (jev.v1.field).threshold = 0.85
+    (jev.v1.field).noul = { threshold: 0.85 }
   ];
 
   // 3. Enum field with criteria guidance -> Jev Choice question
   PriorityLevel priority = 5 [
     (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_CRITICAL",
-      value: "Complete service outage affecting >10% of traffic"
-    },
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_HIGH",
-      value: "Significant latency spike or core feature degradation"
-    },
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_MEDIUM",
-      value: "Isolated component failure with working fallback"
-    },
-    (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_LOW",
-      value: "Minor cosmetic or non-customer-impacting bug"
+    (jev.v1.field).choice = {
+      criteria: {
+        key: "PRIORITY_LEVEL_CRITICAL",
+        value: "Complete service outage affecting >10% of traffic"
+      },
+      criteria: {
+        key: "PRIORITY_LEVEL_HIGH",
+        value: "Significant latency spike or core feature degradation"
+      },
+      criteria: {
+        key: "PRIORITY_LEVEL_MEDIUM",
+        value: "Isolated component failure with working fallback"
+      },
+      criteria: {
+        key: "PRIORITY_LEVEL_LOW",
+        value: "Minor cosmetic or non-customer-impacting bug"
+      }
     }
   ];
 
   // 4. Bounded integer range (<= 10) -> Jev Score with exact sequence rubric [1, 2, 3, 4, 5]
   int32 urgency_rating = 6 [
-    (jev.v1.field).min = 1,
-    (jev.v1.field).max = 5,
-    (jev.v1.field).instructions = "How urgently does this issue need to be resolved?"
+    (jev.v1.field).instructions = "How urgently does this issue need to be resolved?",
+    (jev.v1.field).score = { min: 1, max: 5 }
   ];
 
   // 5. Continuous numeric scale -> Jev Score with 5-tier interpolated rubric [0.0, 25.0, 50.0, 75.0, 100.0]
   float blast_radius_percentage = 7 [
     (jev.v1.field).instructions = "Estimated percentage of production infrastructure impacted",
-    (jev.v1.field).min = 0.0,
-    (jev.v1.field).max = 100.0
+    (jev.v1.field).score = { min: 0.0, max: 100.0 }
   ];
 
   // 6. String with discrete allowed choices -> Jev Choice question
   string compliance_classification = 8 [
-    (jev.v1.field).choices = "PUBLIC",
-    (jev.v1.field).choices = "INTERNAL_CONFIDENTIAL",
-    (jev.v1.field).choices = "RESTRICTED_PII",
-    (jev.v1.field).choices = "PCI_DSS",
-    (jev.v1.field).instructions = "Categorize any sensitive or regulated data exposed in the incident report"
+    (jev.v1.field).instructions = "Categorize any sensitive or regulated data exposed in the incident report",
+    (jev.v1.field).choice = {
+      choices: ["PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII", "PCI_DSS"]
+    }
   ];
 
   // 7. Skipped fields -> Excluded from Jev decision payload
@@ -140,31 +139,36 @@ message IncidentTriage {
 
 ### Options Reference (`(jev.v1.field)`)
 
+Options are grouped by Jev's cognitive primitives (`choice`, `score`, `noul`):
+
 | Option | Type | Description |
 | :--- | :--- | :--- |
 | `instructions` | `string` | Custom instructions / prompt sent to Jev. Defaults to the field's Protobuf doc comment if omitted. |
 | `skip` | `bool` | When `true`, completely skips this field during Jev evaluation (e.g. for raw text, IDs, or timestamps). |
-| `threshold` | `float` | For `bool` (`Noul`) questions: confidence threshold `[0.0 - 1.0]` required to evaluate as `true`. |
-| `choices` | `repeated string` | For `string` or `enum` (`Choice`): explicit whitelist of allowed choice values. |
-| `not_in` | `repeated string` | For `enum` (`Choice`): blacklist of enum value names to exclude from choices. |
-| `scale` | `repeated float` | For numeric (`Score`): explicit discrete rubric tiers (e.g. `[1, 2, 3]` or `[10, 20, 50, 100]`). |
-| `min` | `float` | For numeric (`Score`): lower bound of rubric scale (default: `0.0`). |
-| `max` | `float` | For numeric (`Score`): upper bound of rubric scale (default: `100.0`). |
-| `criteria` | `map<string, string>` | Guidance or descriptive rubric criteria attached to specific options (labels $\to$ descriptions). When placed on a `string` field without `choices`, the map keys define the choices. |
+| **`choice`** | `ChoiceRules` | Configures discrete selection choices. |
+| `choice.choices` | `repeated string` | Explicit whitelist of allowed choice values (for strings or enums). |
+| `choice.not_in` | `repeated string` | Blacklist of enum value names to exclude from choices. |
+| `choice.criteria` | `map<string, string>` | Guidance or descriptive rubric criteria attached to specific options (labels $\to$ descriptions). When placed on a `string` field without `choices`, map keys define the choices. |
+| **`score`** | `ScoreRules` | Configures continuous or rubric score evaluations. |
+| `score.min` | `float` | Lower bound of rubric scale (default: `0.0`). |
+| `score.max` | `float` | Upper bound of rubric scale (default: `100.0`). |
+| `score.scale` | `repeated float` | Explicit discrete rubric tiers (e.g. `[1, 2, 3]` or `[10, 20, 50, 100]`). |
+| **`noul`** | `NoulRules` | Configures binary yes/no intent questions. |
+| `noul.threshold` | `float` | Confidence threshold `[0.0 - 1.0]` required to evaluate as `true`. |
 
 ### Type & Primitive Mapping
 
-| Protobuf Feature | Jev Primitive | Behavior |
-| :--- | :--- | :--- |
-| `oneof` | **`Choice`** | Field names become the selectable choice options. |
-| `bool` | **`Noul`** | Binary yes/no classification with calibrated probability and optional `threshold`. |
-| `enum` | **`Choice`** | All defined enum values (excluding `0` / `_UNSPECIFIED`) become choices. |
-| `enum` + `choices` | **`Choice`** | Restricts choices to the specified whitelist of enum value names. |
-| `enum` + `not_in` | **`Choice`** | Excludes specified enum value names from the choices. |
-| `string` + `choices` | **`Choice`** | Discrete allowed strings become the choices. |
-| `string` + `criteria` | **`Choice`** | Criteria map keys become choices with accompanying descriptive guidance. |
-| Numeric + `scale` | **`Score`** | Discrete numbers become the ordered rubric tiers. |
-| Numeric + `min` / `max` | **`Score`** | Small integer ranges ($\le 10$) expand to exact sequence `[min..max]`; large or continuous ranges interpolate into 5 tiers. |
+| Protobuf Feature | Configured Option | Jev Primitive | Behavior |
+| :--- | :--- | :--- | :--- |
+| `oneof` | *(automatic)* | **`Choice`** | Field names become the selectable choice options. |
+| `bool` | *(optional)* `noul` | **`Noul`** | Binary yes/no classification with calibrated probability and optional threshold. |
+| `enum` | *(automatic)* | **`Choice`** | All defined enum values (excluding `0` / `_UNSPECIFIED`) become choices. |
+| `enum` | `choice.choices` | **`Choice`** | Restricts choices to the specified whitelist of enum value names. |
+| `enum` | `choice.not_in` | **`Choice`** | Excludes specified enum value names from the choices. |
+| `string` | `choice.choices` | **`Choice`** | Discrete allowed strings become the choices. |
+| `string` | `choice.criteria` | **`Choice`** | Criteria map keys become choices with accompanying descriptive guidance. |
+| Numeric | `score.scale` | **`Score`** | Discrete numbers become the ordered rubric tiers. |
+| Numeric | `score.min` / `max` | **`Score`** | Small integer ranges ($\le 10$) expand to exact sequence `[min..max]`; large or continuous ranges interpolate into 5 tiers. |
 
 ### Generated Client Usage
 

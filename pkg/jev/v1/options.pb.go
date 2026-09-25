@@ -26,26 +26,17 @@ const (
 
 type FieldOptions struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Explicit instructions for Jev to evaluate this field.
+	// Explicit instructions / prompt for Jev to evaluate this field.
 	// If omitted, the field's Protobuf doc comment is used.
 	Instructions string `protobuf:"bytes,1,opt,name=instructions,proto3" json:"instructions,omitempty"`
 	// If true, Jev will skip evaluating this field (e.g. for freeform text, IDs, or downstream fields).
 	Skip bool `protobuf:"varint,2,opt,name=skip,proto3" json:"skip,omitempty"`
-	// For boolean (Noul): confidence threshold [0.0 - 1.0] to evaluate as true.
-	Threshold float32 `protobuf:"fixed32,3,opt,name=threshold,proto3" json:"threshold,omitempty"`
-	// For numeric ranges (Score): minimum value of the evaluation rubric scale (default: 0).
-	Min float32 `protobuf:"fixed32,4,opt,name=min,proto3" json:"min,omitempty"`
-	// For numeric ranges (Score): maximum value of the evaluation rubric scale (default: 100).
-	Max float32 `protobuf:"fixed32,5,opt,name=max,proto3" json:"max,omitempty"`
-	// For enums, strings, and choices: guidance/criteria attached to specific options (label -> description).
-	// When specified on a string field without 'choices', the map keys define the allowed choices.
-	Criteria map[string]string `protobuf:"bytes,6,rep,name=criteria,proto3" json:"criteria,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// For string or enum fields (Choice): explicit whitelist of allowed choice values.
-	Choices []string `protobuf:"bytes,7,rep,name=choices,proto3" json:"choices,omitempty"`
-	// For enum fields (Choice): blacklist of enum value names to exclude from choices.
-	NotIn []string `protobuf:"bytes,8,rep,name=not_in,json=notIn,proto3" json:"not_in,omitempty"`
-	// For numeric fields (Score): explicit discrete scale points / rubric tiers (e.g. [1, 2, 3, 4, 5] or [0.2, 0.5, 0.8]).
-	Scale         []float32 `protobuf:"fixed32,9,rep,packed,name=scale,proto3" json:"scale,omitempty"`
+	// Rules configuring a Jev Choice question (discrete selection).
+	Choice *ChoiceRules `protobuf:"bytes,3,opt,name=choice,proto3" json:"choice,omitempty"`
+	// Rules configuring a Jev Score question (evaluation rubric / scale).
+	Score *ScoreRules `protobuf:"bytes,4,opt,name=score,proto3" json:"score,omitempty"`
+	// Rules configuring a Jev Noul question (binary yes/no classification).
+	Noul          *NoulRules `protobuf:"bytes,5,opt,name=noul,proto3" json:"noul,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -94,53 +85,200 @@ func (x *FieldOptions) GetSkip() bool {
 	return false
 }
 
-func (x *FieldOptions) GetThreshold() float32 {
+func (x *FieldOptions) GetChoice() *ChoiceRules {
 	if x != nil {
-		return x.Threshold
-	}
-	return 0
-}
-
-func (x *FieldOptions) GetMin() float32 {
-	if x != nil {
-		return x.Min
-	}
-	return 0
-}
-
-func (x *FieldOptions) GetMax() float32 {
-	if x != nil {
-		return x.Max
-	}
-	return 0
-}
-
-func (x *FieldOptions) GetCriteria() map[string]string {
-	if x != nil {
-		return x.Criteria
+		return x.Choice
 	}
 	return nil
 }
 
-func (x *FieldOptions) GetChoices() []string {
+func (x *FieldOptions) GetScore() *ScoreRules {
+	if x != nil {
+		return x.Score
+	}
+	return nil
+}
+
+func (x *FieldOptions) GetNoul() *NoulRules {
+	if x != nil {
+		return x.Noul
+	}
+	return nil
+}
+
+// ChoiceRules configures a Jev Choice question.
+type ChoiceRules struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Explicit whitelist of allowed choice values (for strings or enums).
+	Choices []string `protobuf:"bytes,1,rep,name=choices,proto3" json:"choices,omitempty"`
+	// Blacklist of enum value names to exclude from choices.
+	NotIn []string `protobuf:"bytes,2,rep,name=not_in,json=notIn,proto3" json:"not_in,omitempty"`
+	// Guidance or descriptive rubric criteria attached to specific options (label -> description).
+	// When specified on a string field without 'choices', the map keys define the allowed choices.
+	Criteria      map[string]string `protobuf:"bytes,3,rep,name=criteria,proto3" json:"criteria,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChoiceRules) Reset() {
+	*x = ChoiceRules{}
+	mi := &file_jev_v1_options_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChoiceRules) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChoiceRules) ProtoMessage() {}
+
+func (x *ChoiceRules) ProtoReflect() protoreflect.Message {
+	mi := &file_jev_v1_options_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChoiceRules.ProtoReflect.Descriptor instead.
+func (*ChoiceRules) Descriptor() ([]byte, []int) {
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ChoiceRules) GetChoices() []string {
 	if x != nil {
 		return x.Choices
 	}
 	return nil
 }
 
-func (x *FieldOptions) GetNotIn() []string {
+func (x *ChoiceRules) GetNotIn() []string {
 	if x != nil {
 		return x.NotIn
 	}
 	return nil
 }
 
-func (x *FieldOptions) GetScale() []float32 {
+func (x *ChoiceRules) GetCriteria() map[string]string {
+	if x != nil {
+		return x.Criteria
+	}
+	return nil
+}
+
+// ScoreRules configures a Jev Score question.
+type ScoreRules struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Minimum value of the evaluation rubric scale (default: 0.0).
+	Min float32 `protobuf:"fixed32,1,opt,name=min,proto3" json:"min,omitempty"`
+	// Maximum value of the evaluation rubric scale (default: 100.0).
+	Max float32 `protobuf:"fixed32,2,opt,name=max,proto3" json:"max,omitempty"`
+	// Explicit discrete scale points / rubric tiers (e.g. [1, 2, 3] or [10, 20, 50, 100] or [0.2, 0.5, 0.8]).
+	Scale         []float32 `protobuf:"fixed32,3,rep,packed,name=scale,proto3" json:"scale,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScoreRules) Reset() {
+	*x = ScoreRules{}
+	mi := &file_jev_v1_options_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScoreRules) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScoreRules) ProtoMessage() {}
+
+func (x *ScoreRules) ProtoReflect() protoreflect.Message {
+	mi := &file_jev_v1_options_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScoreRules.ProtoReflect.Descriptor instead.
+func (*ScoreRules) Descriptor() ([]byte, []int) {
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ScoreRules) GetMin() float32 {
+	if x != nil {
+		return x.Min
+	}
+	return 0
+}
+
+func (x *ScoreRules) GetMax() float32 {
+	if x != nil {
+		return x.Max
+	}
+	return 0
+}
+
+func (x *ScoreRules) GetScale() []float32 {
 	if x != nil {
 		return x.Scale
 	}
 	return nil
+}
+
+// NoulRules configures a Jev Noul question.
+type NoulRules struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Confidence threshold [0.0 - 1.0] required to evaluate as true.
+	Threshold     float32 `protobuf:"fixed32,1,opt,name=threshold,proto3" json:"threshold,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NoulRules) Reset() {
+	*x = NoulRules{}
+	mi := &file_jev_v1_options_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NoulRules) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NoulRules) ProtoMessage() {}
+
+func (x *NoulRules) ProtoReflect() protoreflect.Message {
+	mi := &file_jev_v1_options_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NoulRules.ProtoReflect.Descriptor instead.
+func (*NoulRules) Descriptor() ([]byte, []int) {
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *NoulRules) GetThreshold() float32 {
+	if x != nil {
+		return x.Threshold
+	}
+	return 0
 }
 
 var file_jev_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
@@ -164,20 +302,27 @@ var File_jev_v1_options_proto protoreflect.FileDescriptor
 
 const file_jev_v1_options_proto_rawDesc = "" +
 	"\n" +
-	"\x14jev/v1/options.proto\x12\x06jev.v1\x1a google/protobuf/descriptor.proto\"\xcc\x02\n" +
+	"\x14jev/v1/options.proto\x12\x06jev.v1\x1a google/protobuf/descriptor.proto\"\xc4\x01\n" +
 	"\fFieldOptions\x12\"\n" +
 	"\finstructions\x18\x01 \x01(\tR\finstructions\x12\x12\n" +
-	"\x04skip\x18\x02 \x01(\bR\x04skip\x12\x1c\n" +
-	"\tthreshold\x18\x03 \x01(\x02R\tthreshold\x12\x10\n" +
-	"\x03min\x18\x04 \x01(\x02R\x03min\x12\x10\n" +
-	"\x03max\x18\x05 \x01(\x02R\x03max\x12>\n" +
-	"\bcriteria\x18\x06 \x03(\v2\".jev.v1.FieldOptions.CriteriaEntryR\bcriteria\x12\x18\n" +
-	"\achoices\x18\a \x03(\tR\achoices\x12\x15\n" +
-	"\x06not_in\x18\b \x03(\tR\x05notIn\x12\x14\n" +
-	"\x05scale\x18\t \x03(\x02R\x05scale\x1a;\n" +
+	"\x04skip\x18\x02 \x01(\bR\x04skip\x12+\n" +
+	"\x06choice\x18\x03 \x01(\v2\x13.jev.v1.ChoiceRulesR\x06choice\x12(\n" +
+	"\x05score\x18\x04 \x01(\v2\x12.jev.v1.ScoreRulesR\x05score\x12%\n" +
+	"\x04noul\x18\x05 \x01(\v2\x11.jev.v1.NoulRulesR\x04noul\"\xba\x01\n" +
+	"\vChoiceRules\x12\x18\n" +
+	"\achoices\x18\x01 \x03(\tR\achoices\x12\x15\n" +
+	"\x06not_in\x18\x02 \x03(\tR\x05notIn\x12=\n" +
+	"\bcriteria\x18\x03 \x03(\v2!.jev.v1.ChoiceRules.CriteriaEntryR\bcriteria\x1a;\n" +
 	"\rCriteriaEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01:K\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"F\n" +
+	"\n" +
+	"ScoreRules\x12\x10\n" +
+	"\x03min\x18\x01 \x01(\x02R\x03min\x12\x10\n" +
+	"\x03max\x18\x02 \x01(\x02R\x03max\x12\x14\n" +
+	"\x05scale\x18\x03 \x03(\x02R\x05scale\")\n" +
+	"\tNoulRules\x12\x1c\n" +
+	"\tthreshold\x18\x01 \x01(\x02R\tthreshold:K\n" +
 	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\v2\x14.jev.v1.FieldOptionsR\x05fieldB7Z5github.com/sudorandom/protoc-gen-jev/pkg/jev/v1;jevv1b\x06proto3"
 
 var (
@@ -192,21 +337,27 @@ func file_jev_v1_options_proto_rawDescGZIP() []byte {
 	return file_jev_v1_options_proto_rawDescData
 }
 
-var file_jev_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_jev_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_jev_v1_options_proto_goTypes = []any{
 	(*FieldOptions)(nil),              // 0: jev.v1.FieldOptions
-	nil,                               // 1: jev.v1.FieldOptions.CriteriaEntry
-	(*descriptorpb.FieldOptions)(nil), // 2: google.protobuf.FieldOptions
+	(*ChoiceRules)(nil),               // 1: jev.v1.ChoiceRules
+	(*ScoreRules)(nil),                // 2: jev.v1.ScoreRules
+	(*NoulRules)(nil),                 // 3: jev.v1.NoulRules
+	nil,                               // 4: jev.v1.ChoiceRules.CriteriaEntry
+	(*descriptorpb.FieldOptions)(nil), // 5: google.protobuf.FieldOptions
 }
 var file_jev_v1_options_proto_depIdxs = []int32{
-	1, // 0: jev.v1.FieldOptions.criteria:type_name -> jev.v1.FieldOptions.CriteriaEntry
-	2, // 1: jev.v1.field:extendee -> google.protobuf.FieldOptions
-	0, // 2: jev.v1.field:type_name -> jev.v1.FieldOptions
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	2, // [2:3] is the sub-list for extension type_name
-	1, // [1:2] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 0: jev.v1.FieldOptions.choice:type_name -> jev.v1.ChoiceRules
+	2, // 1: jev.v1.FieldOptions.score:type_name -> jev.v1.ScoreRules
+	3, // 2: jev.v1.FieldOptions.noul:type_name -> jev.v1.NoulRules
+	4, // 3: jev.v1.ChoiceRules.criteria:type_name -> jev.v1.ChoiceRules.CriteriaEntry
+	5, // 4: jev.v1.field:extendee -> google.protobuf.FieldOptions
+	0, // 5: jev.v1.field:type_name -> jev.v1.FieldOptions
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	5, // [5:6] is the sub-list for extension type_name
+	4, // [4:5] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_jev_v1_options_proto_init() }
@@ -220,7 +371,7 @@ func file_jev_v1_options_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_jev_v1_options_proto_rawDesc), len(file_jev_v1_options_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   5,
 			NumExtensions: 1,
 			NumServices:   0,
 		},

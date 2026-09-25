@@ -12,32 +12,50 @@ extend google.protobuf.FieldOptions {
 }
 
 message FieldOptions {
-  // Explicit instructions for Jev to evaluate this field.
+  // Explicit instructions / prompt for Jev to evaluate this field.
   // If omitted, the field's Protobuf doc comment is used.
   string instructions = 1;
 
   // If true, Jev will skip evaluating this field (e.g. for freeform text, IDs, or downstream fields).
   bool skip = 2;
 
-  // For boolean (Noul): confidence threshold [0.0 - 1.0] to evaluate as true.
-  float threshold = 3;
+  // Rules configuring a Jev Choice question (discrete selection).
+  ChoiceRules choice = 3;
 
-  // For numeric ranges (Score): minimum value of the evaluation rubric scale (default: 0).
-  float min = 4;
+  // Rules configuring a Jev Score question (evaluation rubric / scale).
+  ScoreRules score = 4;
 
-  // For numeric ranges (Score): maximum value of the evaluation rubric scale (default: 100).
-  float max = 5;
+  // Rules configuring a Jev Noul question (binary yes/no classification).
+  NoulRules noul = 5;
+}
 
-  // For enums, strings, and choices: guidance/criteria attached to specific options (label -> description).
+// ChoiceRules configures a Jev Choice question.
+message ChoiceRules {
+  // Explicit whitelist of allowed choice values (for strings or enums).
+  repeated string choices = 1;
+
+  // Blacklist of enum value names to exclude from choices.
+  repeated string not_in = 2;
+
+  // Guidance or descriptive rubric criteria attached to specific options (label -> description).
   // When specified on a string field without 'choices', the map keys define the allowed choices.
-  map<string, string> criteria = 6;
+  map<string, string> criteria = 3;
+}
 
-  // For string or enum fields (Choice): explicit whitelist of allowed choice values.
-  repeated string choices = 7;
+// ScoreRules configures a Jev Score question.
+message ScoreRules {
+  // Minimum value of the evaluation rubric scale (default: 0.0).
+  float min = 1;
 
-  // For enum fields (Choice): blacklist of enum value names to exclude from choices.
-  repeated string not_in = 8;
+  // Maximum value of the evaluation rubric scale (default: 100.0).
+  float max = 2;
 
-  // For numeric fields (Score): explicit discrete scale points / rubric tiers (e.g. [1, 2, 3, 4, 5] or [0.2, 0.5, 0.8]).
-  repeated float scale = 9;
+  // Explicit discrete scale points / rubric tiers (e.g. [1, 2, 3] or [10, 20, 50, 100] or [0.2, 0.5, 0.8]).
+  repeated float scale = 3;
+}
+
+// NoulRules configures a Jev Noul question.
+message NoulRules {
+  // Confidence threshold [0.0 - 1.0] required to evaluate as true.
+  float threshold = 1;
 }
