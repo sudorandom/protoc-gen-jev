@@ -1,5 +1,8 @@
 # protoc-gen-jev
 
+> [!WARNING]
+> **Experimental**: `protoc-gen-jev` is currently experimental and under active development. APIs, question schema formats, and generated code templates are subject to change without notice.
+
 A Protobuf compiler plugin for **TypeSafe AI's Jev** (System One fast cognitive model).
 
 `protoc-gen-jev` inspects Protobuf messages and automatically generates typed Jev client code, question schemas, and decision structures across multiple languages.

@@ -1,3 +1,4 @@
+// protoc-gen-jev is an experimental Protobuf compiler plugin for TypeSafe AI's Jev.
 package main
 
 import (
