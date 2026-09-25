@@ -1,9 +1,10 @@
 package golden_test
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/sudorandom/protoc-gen-jev/internal/golden"
 )
@@ -13,9 +14,7 @@ func TestGoldenOutputs(t *testing.T) {
 	actualJevDir := filepath.Join("..", "..", "gen", "jev")
 	goldenJevDir := filepath.Join("..", "..", "testdata", "golden")
 
-	if _, err := os.Stat(actualJevDir); os.IsNotExist(err) {
-		t.Fatalf("generated directory %s does not exist. Run buf generate first.", actualJevDir)
-	}
+	require.DirExists(t, actualJevDir, "generated directory %s does not exist. Run buf generate first.", actualJevDir)
 
 	golden.VerifyDir(t, actualJevDir, goldenJevDir)
 }

@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	rulesv1 "github.com/sudorandom/protoc-gen-jev/gen/jev/ai/rules/v1"
 )
 
@@ -15,132 +18,86 @@ func TestGeneratedClient_BuildQuestions(t *testing.T) {
 	questions := client.BuildQuestions()
 
 	// 1. Oneof delivery_method -> Choice
+	require.Contains(t, questions, "delivery_method")
 	dm, ok := questions["delivery_method"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected delivery_method question")
-	}
-	if dm["type"] != "choice" {
-		t.Errorf("delivery_method type = %v, want choice", dm["type"])
-	}
-	crit, _ := dm["criteria"].(map[string]any)
-	if _, ok := crit["email"]; !ok {
-		t.Errorf("missing email in delivery_method criteria")
-	}
-	if _, ok := crit["sms"]; !ok {
-		t.Errorf("missing sms in delivery_method criteria")
-	}
-	if _, ok := crit["push_notification"]; !ok {
-		t.Errorf("missing push_notification in delivery_method criteria")
-	}
+	require.True(t, ok)
+	assert.Equal(t, "choice", dm["type"])
+	crit, ok := dm["criteria"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, crit, "email")
+	assert.Contains(t, crit, "sms")
+	assert.Contains(t, crit, "push_notification")
 
 	// 2. Enum.in executionMode -> Choice with only MODE_FAST and MODE_BALANCED
+	require.Contains(t, questions, "executionMode")
 	em, ok := questions["executionMode"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected executionMode question")
-	}
-	emCrit, _ := em["criteria"].(map[string]any)
-	if len(emCrit) != 2 {
-		t.Errorf("executionMode criteria count = %d, want 2 (only MODE_FAST and MODE_BALANCED)", len(emCrit))
-	}
+	require.True(t, ok)
+	emCrit, ok := em["criteria"].(map[string]any)
+	require.True(t, ok)
+	assert.Len(t, emCrit, 2)
+	assert.Contains(t, emCrit, "MODE_FAST")
+	assert.Contains(t, emCrit, "MODE_BALANCED")
 
 	// 3. Enum.not_in filteredMode -> MODE_DEBUG must NOT be in criteria
+	require.Contains(t, questions, "filteredMode")
 	fm, ok := questions["filteredMode"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected filteredMode question")
-	}
-	fmCrit, _ := fm["criteria"].(map[string]any)
-	if _, ok := fmCrit["MODE_DEBUG"]; ok {
-		t.Errorf("MODE_DEBUG should have been excluded by not_in rule")
-	}
+	require.True(t, ok)
+	fmCrit, ok := fm["criteria"].(map[string]any)
+	require.True(t, ok)
+	assert.NotContains(t, fmCrit, "MODE_DEBUG")
 
 	// 4. Integer small range ratingSmall -> 1..5
+	require.Contains(t, questions, "ratingSmall")
 	rs, ok := questions["ratingSmall"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected ratingSmall question")
-	}
-	rsCrit, _ := rs["criteria"].([]string)
-	wantRs := []string{"1", "2", "3", "4", "5"}
-	if len(rsCrit) != len(wantRs) {
-		t.Errorf("ratingSmall criteria = %v, want %v", rsCrit, wantRs)
-	}
+	require.True(t, ok)
+	assert.Equal(t, []string{"1", "2", "3", "4", "5"}, rs["criteria"])
 
 	// 5. Integer discrete allowed values discreteCode -> 10, 20, 50, 100
+	require.Contains(t, questions, "discreteCode")
 	dc, ok := questions["discreteCode"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected discreteCode question")
-	}
-	dcCrit, _ := dc["criteria"].([]string)
-	wantDc := []string{"10", "20", "50", "100"}
-	if len(dcCrit) != len(wantDc) {
-		t.Errorf("discreteCode criteria = %v, want %v", dcCrit, wantDc)
-	}
+	require.True(t, ok)
+	assert.Equal(t, []string{"10", "20", "50", "100"}, dc["criteria"])
 
 	// 6. Large scale integer largeScale -> [0, 250, 500, 750, 1000]
+	require.Contains(t, questions, "largeScale")
 	ls, ok := questions["largeScale"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected largeScale question")
-	}
-	lsCrit, _ := ls["criteria"].([]string)
-	wantLs := []string{"0", "250", "500", "750", "1000"}
-	if len(lsCrit) != len(wantLs) {
-		t.Errorf("largeScale criteria = %v, want %v", lsCrit, wantLs)
-	}
+	require.True(t, ok)
+	assert.Equal(t, []string{"0", "250", "500", "750", "1000"}, ls["criteria"])
 
 	// 7. Float continuous temperature -> [-40.0, -15.0, 10.0, 35.0, 60.0]
+	require.Contains(t, questions, "temperature")
 	temp, ok := questions["temperature"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected temperature question")
-	}
-	tempCrit, _ := temp["criteria"].([]string)
-	wantTemp := []string{"-40.0", "-15.0", "10.0", "35.0", "60.0"}
-	if len(tempCrit) != len(wantTemp) {
-		t.Errorf("temperature criteria = %v, want %v", tempCrit, wantTemp)
-	}
+	require.True(t, ok)
+	assert.Equal(t, []string{"-40.0", "-15.0", "10.0", "35.0", "60.0"}, temp["criteria"])
 
 	// 8. String securityClearance -> Choice with PUBLIC, SECRET, TOP_SECRET
+	require.Contains(t, questions, "securityClearance")
 	sc, ok := questions["securityClearance"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected securityClearance question")
-	}
-	if sc["type"] != "choice" {
-		t.Errorf("securityClearance type = %v, want choice", sc["type"])
-	}
-	scCrit, _ := sc["criteria"].(map[string]any)
-	if len(scCrit) != 3 {
-		t.Errorf("securityClearance criteria count = %d, want 3", len(scCrit))
-	}
+	require.True(t, ok)
+	assert.Equal(t, "choice", sc["type"])
+	scCrit, ok := sc["criteria"].(map[string]any)
+	require.True(t, ok)
+	assert.Len(t, scCrit, 3)
 
 	// 9. Custom Jev criteria decisionFlag -> Choice with APPROVE, REJECT
+	require.Contains(t, questions, "decisionFlag")
 	df, ok := questions["decisionFlag"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected decisionFlag question")
-	}
-	dfCrit, _ := df["criteria"].(map[string]any)
-	if _, ok := dfCrit["APPROVE"]; !ok {
-		t.Errorf("missing APPROVE in decisionFlag criteria")
-	}
+	require.True(t, ok)
+	dfCrit, ok := df["criteria"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, dfCrit, "APPROVE")
+	assert.Contains(t, dfCrit, "REJECT")
 
 	// 10. Custom Jev min/max customBoundedScore -> [10.0, 20.0, 30.0, 40.0, 50.0]
+	require.Contains(t, questions, "customBoundedScore")
 	cbs, ok := questions["customBoundedScore"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected customBoundedScore question")
-	}
-	cbsCrit, _ := cbs["criteria"].([]string)
-	wantCbs := []string{"10.0", "20.0", "30.0", "40.0", "50.0"}
-	if len(cbsCrit) != len(wantCbs) {
-		t.Errorf("customBoundedScore criteria = %v, want %v", cbsCrit, wantCbs)
-	}
+	require.True(t, ok)
+	assert.Equal(t, []string{"10.0", "20.0", "30.0", "40.0", "50.0"}, cbs["criteria"])
 
 	// 11. Skipped & freeform fields MUST NOT be present
-	if _, ok := questions["secretToken"]; ok {
-		t.Errorf("secretToken was marked skip=true and must not be in questions")
-	}
-	if _, ok := questions["freeformDescription"]; ok {
-		t.Errorf("freeformDescription has no decision rules and must not be in questions")
-	}
-	if _, ok := questions["optionalNote"]; ok {
-		t.Errorf("optionalNote is a proto3 optional (synthetic oneof) and must not be in questions")
-	}
+	assert.NotContains(t, questions, "secretToken")
+	assert.NotContains(t, questions, "freeformDescription")
+	assert.NotContains(t, questions, "optionalNote")
 }
 
 func TestGeneratedClient_Evaluate(t *testing.T) {
@@ -172,25 +129,13 @@ func TestGeneratedClient_Evaluate(t *testing.T) {
 	client.HTTPClient = ts.Client()
 
 	decisions, err := client.Evaluate(context.Background(), map[string]any{"text": "Sample request"})
-	if err != nil {
-		t.Fatalf("client.Evaluate error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if decisions.DeliveryMethod != "email" {
-		t.Errorf("DeliveryMethod = %q, want email", decisions.DeliveryMethod)
-	}
-	if decisions.ExecutionMode != "MODE_FAST" {
-		t.Errorf("ExecutionMode = %q, want MODE_FAST", decisions.ExecutionMode)
-	}
-	if decisions.RatingSmall != 5 {
-		t.Errorf("RatingSmall = %v, want 5", decisions.RatingSmall)
-	}
-	if decisions.SecurityClearance != "TOP_SECRET" {
-		t.Errorf("SecurityClearance = %q, want TOP_SECRET", decisions.SecurityClearance)
-	}
-	if decisions.CustomBoundedScore != 40.0 {
-		t.Errorf("CustomBoundedScore = %v, want 40.0", decisions.CustomBoundedScore)
-	}
+	assert.Equal(t, "email", decisions.DeliveryMethod)
+	assert.Equal(t, "MODE_FAST", decisions.ExecutionMode)
+	assert.Equal(t, 5.0, decisions.RatingSmall)
+	assert.Equal(t, "TOP_SECRET", decisions.SecurityClearance)
+	assert.Equal(t, 40.0, decisions.CustomBoundedScore)
 }
 
 func TestGeneratedClient_BatchEvaluate(t *testing.T) {
@@ -220,22 +165,12 @@ func TestGeneratedClient_BatchEvaluate(t *testing.T) {
 	}
 
 	results, err := client.BatchEvaluate(context.Background(), states)
-	if err != nil {
-		t.Fatalf("BatchEvaluate error: %v", err)
-	}
+	require.NoError(t, err)
+	require.Len(t, results, 3)
+	assert.Equal(t, 3, callCount)
 
-	if len(results) != 3 {
-		t.Fatalf("expected 3 results, got %d", len(results))
-	}
-	if callCount != 3 {
-		t.Errorf("expected 3 server calls, got %d", callCount)
-	}
-	for i, dec := range results {
-		if dec.DeliveryMethod != "sms" {
-			t.Errorf("result[%d].DeliveryMethod = %q, want sms", i, dec.DeliveryMethod)
-		}
-		if dec.RatingSmall != 4 {
-			t.Errorf("result[%d].RatingSmall = %v, want 4", i, dec.RatingSmall)
-		}
+	for _, dec := range results {
+		assert.Equal(t, "sms", dec.DeliveryMethod)
+		assert.Equal(t, 4.0, dec.RatingSmall)
 	}
 }

@@ -1,8 +1,10 @@
 package parser
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 
@@ -85,9 +87,7 @@ func TestResolveIntCriteria(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := resolveIntCriteria(nil, tt.rule, tt.opt)
-			if !reflect.DeepEqual(got, tt.expected) {
-				t.Errorf("resolveIntCriteria() = %v; want %v", got, tt.expected)
-			}
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
@@ -154,9 +154,7 @@ func TestResolveFloatCriteria(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := resolveFloatCriteria(nil, tt.rule, tt.opt)
-			if !reflect.DeepEqual(got, tt.expected) {
-				t.Errorf("resolveFloatCriteria() = %v; want %v", got, tt.expected)
-			}
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
@@ -164,9 +162,7 @@ func TestResolveFloatCriteria(t *testing.T) {
 func TestResolveStringCriteria(t *testing.T) {
 	t.Run("empty without rules", func(t *testing.T) {
 		got := resolveStringCriteria(nil, nil, nil)
-		if len(got) != 0 {
-			t.Errorf("expected empty criteria, got %v", got)
-		}
+		assert.Empty(t, got)
 	})
 
 	t.Run("protovalidate string.in discrete values", func(t *testing.T) {
@@ -178,14 +174,10 @@ func TestResolveStringCriteria(t *testing.T) {
 			},
 		}
 		got := resolveStringCriteria(nil, rule, nil)
-		if len(got) != 3 {
-			t.Fatalf("expected 3 items, got %v", got)
-		}
-		for _, key := range []string{"ALPHA", "BETA", "GAMMA"} {
-			if _, ok := got[key]; !ok {
-				t.Errorf("missing expected key %q in %v", key, got)
-			}
-		}
+		require.Len(t, got, 3)
+		assert.Contains(t, got, "ALPHA")
+		assert.Contains(t, got, "BETA")
+		assert.Contains(t, got, "GAMMA")
 	})
 
 	t.Run("custom jev criteria options", func(t *testing.T) {
@@ -196,14 +188,8 @@ func TestResolveStringCriteria(t *testing.T) {
 			},
 		}
 		got := resolveStringCriteria(nil, nil, opt)
-		if len(got) != 2 {
-			t.Fatalf("expected 2 items, got %v", got)
-		}
-		if _, ok := got["APPROVE"]; !ok {
-			t.Errorf("missing APPROVE in %v", got)
-		}
-		if _, ok := got["REJECT"]; !ok {
-			t.Errorf("missing REJECT in %v", got)
-		}
+		require.Len(t, got, 2)
+		assert.Contains(t, got, "APPROVE")
+		assert.Contains(t, got, "REJECT")
 	})
 }

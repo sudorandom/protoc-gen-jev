@@ -3,6 +3,9 @@ package parser_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sudorandom/protoc-gen-jev/internal/model"
 	"github.com/sudorandom/protoc-gen-jev/internal/parser"
 )
@@ -32,9 +35,7 @@ func TestCleanComments(t *testing.T) {
 
 	for _, tt := range tests {
 		got := parser.CleanComments(tt.input)
-		if got != tt.expected {
-			t.Errorf("CleanComments(%q) = %q; want %q", tt.input, got, tt.expected)
-		}
+		assert.Equal(t, tt.expected, got, "CleanComments(%q)", tt.input)
 	}
 }
 
@@ -52,25 +53,23 @@ func TestToPascalCase(t *testing.T) {
 
 	for _, tt := range tests {
 		got := parser.ToPascalCase(tt.input)
-		if got != tt.expected {
-			t.Errorf("ToPascalCase(%q) = %q; want %q", tt.input, got, tt.expected)
-		}
+		assert.Equal(t, tt.expected, got, "ToPascalCase(%q)", tt.input)
 	}
 }
 
 func TestParseTargets(t *testing.T) {
 	allOpts := model.ParseTargets("all")
-	if !allOpts.GenerateGo || !allOpts.GenerateTypeScript || !allOpts.GeneratePython || !allOpts.GenerateJSON {
-		t.Errorf("ParseTargets('all') should enable all targets")
-	}
+	require.True(t, allOpts.GenerateGo && allOpts.GenerateTypeScript && allOpts.GeneratePython && allOpts.GenerateJSON, "ParseTargets('all') should enable all targets")
 
 	goOnly := model.ParseTargets("go")
-	if !goOnly.GenerateGo || goOnly.GenerateTypeScript || goOnly.GeneratePython {
-		t.Errorf("ParseTargets('go') should only enable Go (+ json)")
-	}
+	assert.True(t, goOnly.GenerateGo, "ParseTargets('go') should enable Go")
+	assert.True(t, goOnly.GenerateJSON, "ParseTargets('go') should enable JSON")
+	assert.False(t, goOnly.GenerateTypeScript, "ParseTargets('go') should not enable TypeScript")
+	assert.False(t, goOnly.GeneratePython, "ParseTargets('go') should not enable Python")
 
 	tsGo := model.ParseTargets("ts,go")
-	if !tsGo.GenerateGo || !tsGo.GenerateTypeScript || tsGo.GeneratePython {
-		t.Errorf("ParseTargets('ts,go') should enable TS and Go")
-	}
+	assert.True(t, tsGo.GenerateGo, "ParseTargets('ts,go') should enable Go")
+	assert.True(t, tsGo.GenerateTypeScript, "ParseTargets('ts,go') should enable TypeScript")
+	assert.True(t, tsGo.GenerateJSON, "ParseTargets('ts,go') should enable JSON")
+	assert.False(t, tsGo.GeneratePython, "ParseTargets('ts,go') should not enable Python")
 }

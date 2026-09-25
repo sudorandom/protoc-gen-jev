@@ -2,15 +2,14 @@ package golden
 
 import (
 	"bytes"
-	"encoding/json"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var Update = flag.Bool("update", false, "update .golden files")
@@ -23,12 +22,12 @@ func AssertMatches(t *testing.T, goldenPath string, actualBytes []byte) {
 	shouldUpdate := *Update || os.Getenv("UPDATE_GOLDEN") == "1" || os.Getenv("UPDATE_GOLDEN") == "true"
 
 	if shouldUpdate {
-		if err := os.MkdirAll(filepath.Dir(goldenPath), 0755); err != nil {
-			t.Fatalf("failed to create directory for golden file %s: %v", goldenPath, err)
-		}
-		if err := os.WriteFile(goldenPath, actualBytes, 0644); err != nil {
-			t.Fatalf("failed to write golden file %s: %v", goldenPath, err)
-		}
+		err := os.MkdirAll(filepath.Dir(goldenPath), 0755)
+		require.NoError(t, err, "failed to create directory for golden file %s", goldenPath)
+
+		err = os.WriteFile(goldenPath, actualBytes, 0644)
+		require.NoError(t, err, "failed to write golden file %s", goldenPath)
+
 		t.Logf("Updated golden file: %s", goldenPath)
 		return
 	}
@@ -38,7 +37,7 @@ func AssertMatches(t *testing.T, goldenPath string, actualBytes []byte) {
 		if os.IsNotExist(err) {
 			t.Fatalf("golden file %s does not exist. Run with -update to create it.", goldenPath)
 		}
-		t.Fatalf("failed to read golden file %s: %v", goldenPath, err)
+		require.NoError(t, err, "failed to read golden file %s", goldenPath)
 	}
 
 	// Normalize CRLF to LF
@@ -47,22 +46,11 @@ func AssertMatches(t *testing.T, goldenPath string, actualBytes []byte) {
 
 	// If JSON, compare formatted JSON
 	if filepath.Ext(goldenPath) == ".json" {
-		var actualJSON, goldenJSON any
-		if err := json.Unmarshal(actualClean, &actualJSON); err == nil {
-			if err := json.Unmarshal(goldenClean, &goldenJSON); err == nil {
-				diff := cmp.Diff(goldenJSON, actualJSON)
-				if diff != "" {
-					t.Errorf("Golden JSON mismatch (-golden +actual):\n%s", diff)
-				}
-				return
-			}
-		}
+		assert.JSONEq(t, string(goldenClean), string(actualClean), "Golden JSON mismatch for %s", goldenPath)
+		return
 	}
 
-	if !bytes.Equal(goldenClean, actualClean) {
-		diff := cmp.Diff(string(goldenClean), string(actualClean))
-		t.Errorf("Golden mismatch for %s (-golden +actual):\n%s", goldenPath, diff)
-	}
+	assert.Equal(t, string(goldenClean), string(actualClean), "Golden mismatch for %s", goldenPath)
 }
 
 // DeleteAll removes the golden directory.
@@ -94,9 +82,7 @@ func VerifyDir(t *testing.T, actualDir, goldenDir string) {
 
 		goldenFile := filepath.Join(goldenDir, rel)
 		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read actual file %s: %w", path, err)
-		}
+		require.NoError(t, err, "failed to read actual file %s", path)
 
 		t.Run(rel, func(t *testing.T) {
 			AssertMatches(t, goldenFile, data)
@@ -104,7 +90,5 @@ func VerifyDir(t *testing.T, actualDir, goldenDir string) {
 		return nil
 	})
 
-	if err != nil {
-		t.Fatalf("failed walking directory %s: %v", actualDir, err)
-	}
+	require.NoError(t, err, "failed walking directory %s", actualDir)
 }
