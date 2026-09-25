@@ -69,8 +69,8 @@ func TestParseTargets(t *testing.T) {
 		t.Errorf("ParseTargets('go') should only enable Go (+ json)")
 	}
 
-	tsGo := model.ParseTargets("ts+go")
+	tsGo := model.ParseTargets("ts,go")
 	if !tsGo.GenerateGo || !tsGo.GenerateTypeScript || tsGo.GeneratePython {
-		t.Errorf("ParseTargets('ts+go') should enable TS and Go")
+		t.Errorf("ParseTargets('ts,go') should enable TS and Go")
 	}
 }

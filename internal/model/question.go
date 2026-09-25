@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // QuestionType represents Jev's primitive question types.
 type QuestionType string
 
@@ -35,7 +37,7 @@ type TargetOptions struct {
 	GeneratePython     bool
 }
 
-// ParseTargets parses target flags like "go+ts+python+json" or "all".
+// ParseTargets parses comma-separated target flags like "go,ts,python,json" or "all".
 func ParseTargets(targetOpt string) TargetOptions {
 	if targetOpt == "all" || targetOpt == "" {
 		return TargetOptions{
@@ -49,7 +51,8 @@ func ParseTargets(targetOpt string) TargetOptions {
 	var opts TargetOptions
 	opts.GenerateJSON = true // always generate declarative JSON spec
 
-	for _, t := range splitTargets(targetOpt) {
+	for _, t := range strings.Split(targetOpt, ",") {
+		t = strings.TrimSpace(t)
 		switch t {
 		case "go":
 			opts.GenerateGo = true
@@ -67,57 +70,4 @@ func ParseTargets(targetOpt string) TargetOptions {
 		}
 	}
 	return opts
-}
-
-func splitTargets(s string) []string {
-	var res []string
-	for _, part := range []string{s} {
-		for _, sub := range []string{"+", ","} {
-			part = replaceAll(part, sub, " ")
-		}
-		for _, token := range fields(part) {
-			if token != "" {
-				res = append(res, token)
-			}
-		}
-	}
-	return res
-}
-
-func replaceAll(s, old, newStr string) string {
-	for {
-		idx := indexOf(s, old)
-		if idx == -1 {
-			return s
-		}
-		s = s[:idx] + newStr + s[idx+len(old):]
-	}
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
-}
-
-func fields(s string) []string {
-	var res []string
-	var cur []byte
-	for i := 0; i < len(s); i++ {
-		if s[i] == ' ' || s[i] == '\t' || s[i] == '\n' {
-			if len(cur) > 0 {
-				res = append(res, string(cur))
-				cur = nil
-			}
-		} else {
-			cur = append(cur, s[i])
-		}
-	}
-	if len(cur) > 0 {
-		res = append(res, string(cur))
-	}
-	return res
 }

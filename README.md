@@ -44,7 +44,7 @@ plugins:
   - local: protoc-gen-jev
     out: gen/jev
     opt:
-      # Options: go, ts, python, json, or all (comma or plus separated)
+      # Options: go, ts, python, json, or all (comma-separated)
       - targets=all
 ```
 
