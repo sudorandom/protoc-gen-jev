@@ -18,7 +18,25 @@ A Protobuf compiler plugin for **TypeSafe AI's Jev** (System One fast cognitive 
 
 ## Usage with Buf
 
-Add `protoc-gen-jev` to your `buf.gen.yaml`:
+### 1. Depend on `jev/v1/options.proto`
+
+To import `jev/v1/options.proto` into your schemas, add the dependency to your `buf.yaml` (see [`examples/buf.yaml`](examples/buf.yaml)):
+
+```yaml
+version: v2
+deps:
+  - buf.build/sudo-random/protoc-gen-jev
+```
+
+Then update your dependencies:
+
+```bash
+buf dep update
+```
+
+### 2. Configure Code Generation
+
+Add `protoc-gen-jev` to your `buf.gen.yaml` (see [`examples/buf.gen.yaml`](examples/buf.gen.yaml)):
 
 ```yaml
 version: v2
@@ -26,7 +44,7 @@ plugins:
   - local: protoc-gen-jev
     out: gen/jev
     opt:
-      # Options: go, ts, py, json, or all (comma or plus separated)
+      # Options: go, ts, python, json, or all (comma or plus separated)
       - targets=all
 ```
 

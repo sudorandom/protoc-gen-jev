@@ -1,0 +1,5 @@
+# Example buf.yaml demonstrating how downstream projects consume jev/v1/options.proto
+# from the Buf Schema Registry (BSR).
+version: v2
+deps:
+  - buf.build/sudo-random/protoc-gen-jev
