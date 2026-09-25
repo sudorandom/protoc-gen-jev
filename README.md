@@ -88,10 +88,10 @@ message IncidentTriage {
     (jev.v1.field).threshold = 0.85
   ];
 
-  // 3. Enum restricted by protovalidate -> Jev Choice question
-  // Whitelists actionable priorities and provides descriptive criteria guidance.
+  // 3. Enum field -> Jev Choice question
+  // Uses protovalidate's defined_only rule (all non-unspecified values are choices).
   PriorityLevel priority = 5 [
-    (buf.validate.field).enum = { in: [1, 2, 3, 4] },
+    (buf.validate.field).enum.defined_only = true,
     (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
     (jev.v1.field).criteria = {
       key: "PRIORITY_LEVEL_CRITICAL", value: "Complete service outage affecting >10% of traffic",
@@ -144,7 +144,9 @@ message IncidentTriage {
 | :--- | :--- | :--- | :--- |
 | `oneof` | Mutual exclusion | **`Choice`** | Field names become the selectable choice options. |
 | `bool` | `bool` | **`Noul`** | Binary yes/no classification with calibrated probability. |
-| `enum.in` | `enum` | **`Choice`** | Restricts choices to the specified whitelist of enum values. |
+| *(default / none)* | `enum` | **`Choice`** | All defined enum values (excluding `0` / `_UNSPECIFIED`) become choices. |
+| `enum.defined_only` | `enum` | **`Choice`** | Standard protovalidate check; maps all defined enum values. |
+| `enum.in` | `enum` | **`Choice`** | Restricts choices to the specified subset whitelist. |
 | `enum.not_in` | `enum` | **`Choice`** | Excludes specified enum values from the choices. |
 | `string.in` | `string` | **`Choice`** | Discrete allowed strings become the choices. |
 | `int.in` / `float.in` | `int32`, `int64`, `float`, `double` | **`Score`** | Discrete numbers become the ordered rubric tiers. |
