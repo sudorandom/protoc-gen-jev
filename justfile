@@ -37,7 +37,7 @@ test-syntax: generate
 # Run all unit tests, syntax checks, and golden file verification
 test: generate test-syntax
 	@echo "Running Go tests..."
-	go test -v ./internal/... ./cmd/... .
+	go test -v ./internal/... .
 
 # Run real end-to-end examples across all languages (Go, Python, TypeScript)
 run-examples: generate
@@ -82,7 +82,7 @@ lint:
 	@echo "Linting protobuf files..."
 	buf lint
 	@echo "Running go vet..."
-	go vet ./internal/... ./cmd/... .
+	go vet ./internal/... ./pkg/... .
 	@echo "Running golangci-lint..."
 	golangci-lint run ./...
 

@@ -1,5 +1,5 @@
 # Binaries
-protoc-gen-jev
+/protoc-gen-jev
 *.exe
 *.test
 
@@ -8,6 +8,10 @@ gen/
 node_modules/
 __pycache__/
 *.pyc
+
+# Local mise configuration overrides
+mise.local.toml
+.mise.local.toml
 
 # OS artifacts
 .DS_Store
