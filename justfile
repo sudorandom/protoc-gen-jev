@@ -16,8 +16,10 @@ build:
 
 # Generate code using buf
 generate: build
-	@echo "Running buf generate..."
+	@echo "Running buf generate for testdata..."
 	buf generate
+	@echo "Running buf generate for examples..."
+	(cd examples && PATH="{{ justfile_directory() }}:$PATH" buf generate)
 	@echo "✔ Code generation complete."
 
 # ------------------------------------------------------------------------------
@@ -34,13 +36,27 @@ test-syntax: generate
 	npx --package typescript tsc --noEmit --skipLibCheck testdata/types/@typesafe-ai/sdk/index.d.ts `find gen/jev -name "*.ts"`
 	@echo "✔ Generated Go, Python, and TypeScript code verified."
 
-# Run all unit tests, syntax checks, and golden file verification
-test: generate test-syntax
+# Compile and verify all examples without executing them
+compile-examples: generate
+	@echo "Compiling Go example..."
+	go build -o /dev/null ./examples/go
+	@echo "Compiling Python example..."
+	python -c "import py_compile; py_compile.compile('examples/python/main.py', doraise=True)"
+	@echo "Compiling TypeScript example..."
+	@if [ ! -d "examples/typescript/node_modules" ]; then \
+		echo "Installing TypeScript example dependencies..."; \
+		npm --prefix examples/typescript install --no-audit; \
+	fi
+	npx --prefix examples/typescript tsc --noEmit -p examples/typescript/tsconfig.json
+	@echo "✔ All examples compiled successfully."
+
+# Run all unit tests, syntax checks, golden file verification, and compile examples
+test: generate test-syntax compile-examples
 	@echo "Running Go tests..."
 	go test -v ./internal/... .
 
 # Run real end-to-end examples across all languages (Go, Python, TypeScript)
-run-examples: generate
+run-examples: compile-examples
 	@echo "=== Running Go Example ==="
 	go run examples/go/main.go
 	@echo ""
@@ -49,15 +65,9 @@ run-examples: generate
 	python examples/python/main.py
 	@echo ""
 	@echo "=== Running TypeScript Example ==="
-	@if [ ! -d "examples/typescript/node_modules" ]; then \
-		echo "Installing TypeScript example dependencies..."; \
-		npm --prefix examples/typescript install --no-audit; \
-	fi
 	NODE_PATH="{{ justfile_directory() }}/examples/typescript/node_modules" npx --prefix examples/typescript tsx examples/typescript/index.ts
 	@echo ""
 	@echo "✔ All language examples completed successfully!"
-
-
 
 # Update golden files with newly generated files
 update-golden: generate
@@ -82,7 +92,7 @@ lint: generate
 	@echo "Linting protobuf files..."
 	buf lint
 	@echo "Running go vet..."
-	go vet ./internal/... ./pkg/... .
+	go vet ./internal/... ./pkg/... ./examples/... .
 	@echo "Running golangci-lint..."
 	golangci-lint run ./...
 
@@ -102,5 +112,5 @@ format:
 # Clean build artifacts and generated files
 clean:
 	@echo "Cleaning artifacts..."
-	rm -rf gen/ protoc-gen-jev
+	rm -rf gen/ examples/gen/ protoc-gen-jev
 	@echo "✔ Clean complete."

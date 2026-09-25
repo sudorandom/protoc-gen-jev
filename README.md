@@ -94,10 +94,20 @@ message IncidentTriage {
     (buf.validate.field).enum.defined_only = true,
     (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
     (jev.v1.field).criteria = {
-      key: "PRIORITY_LEVEL_CRITICAL", value: "Complete service outage affecting >10% of traffic",
-      key: "PRIORITY_LEVEL_HIGH",     value: "Significant latency spike or core feature degradation",
-      key: "PRIORITY_LEVEL_MEDIUM",   value: "Isolated component failure with working fallback",
-      key: "PRIORITY_LEVEL_LOW",      value: "Minor cosmetic or non-customer-impacting bug"
+      key: "PRIORITY_LEVEL_CRITICAL",
+      value: "Complete service outage affecting >10% of traffic"
+    },
+    (jev.v1.field).criteria = {
+      key: "PRIORITY_LEVEL_HIGH",
+      value: "Significant latency spike or core feature degradation"
+    },
+    (jev.v1.field).criteria = {
+      key: "PRIORITY_LEVEL_MEDIUM",
+      value: "Isolated component failure with working fallback"
+    },
+    (jev.v1.field).criteria = {
+      key: "PRIORITY_LEVEL_LOW",
+      value: "Minor cosmetic or non-customer-impacting bug"
     }
   ];
 

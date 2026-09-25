@@ -1,0 +1,87 @@
+{
+  "message_name": "IncidentTriage",
+  "package": "incident.v1",
+  "questions": {
+    "blastRadiusPercentage": {
+      "type": "Score",
+      "instructions": "Estimated percentage of production infrastructure impacted",
+      "criteria": [
+        "0.0",
+        "25.0",
+        "50.0",
+        "75.0",
+        "100.0"
+      ],
+      "proto_field": "blast_radius_percentage",
+      "json_field": "blastRadiusPercentage",
+      "go_field": "BlastRadiusPercentage"
+    },
+    "complianceClassification": {
+      "type": "Choice",
+      "instructions": "Categorize any sensitive or regulated data exposed in the incident report",
+      "criteria": {
+        "INTERNAL_CONFIDENTIAL": null,
+        "PCI_DSS": null,
+        "PUBLIC": null,
+        "RESTRICTED_PII": null
+      },
+      "proto_field": "compliance_classification",
+      "json_field": "complianceClassification",
+      "go_field": "ComplianceClassification"
+    },
+    "priority": {
+      "type": "Choice",
+      "instructions": "Assess the operational severity and customer blast radius",
+      "criteria": {
+        "PRIORITY_LEVEL_CRITICAL": null,
+        "PRIORITY_LEVEL_HIGH": null,
+        "PRIORITY_LEVEL_LOW": null,
+        "PRIORITY_LEVEL_MEDIUM": null
+      },
+      "proto_field": "priority",
+      "json_field": "priority",
+      "go_field": "Priority"
+    },
+    "requiresImmediatePaging": {
+      "type": "Noul",
+      "instructions": "Does this incident indicate active user-facing outage requiring paging?",
+      "proto_field": "requires_immediate_paging",
+      "json_field": "requiresImmediatePaging",
+      "go_field": "RequiresImmediatePaging"
+    },
+    "routing_target": {
+      "type": "Choice",
+      "instructions": "1. Oneof mutual exclusion -\u003e Jev Choice question Jev selects the single most appropriate routing target based on input context.",
+      "criteria": {
+        "automated_runbook": null,
+        "incident_commander": null,
+        "oncall_engineer": null
+      },
+      "proto_field": "routing_target",
+      "json_field": "routing_target",
+      "go_field": "RoutingTarget"
+    },
+    "urgencyRating": {
+      "type": "Score",
+      "instructions": "How urgently does this issue need to be resolved?",
+      "criteria": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "proto_field": "urgency_rating",
+      "json_field": "urgencyRating",
+      "go_field": "UrgencyRating"
+    }
+  },
+  "order": [
+    "routing_target",
+    "requiresImmediatePaging",
+    "priority",
+    "urgencyRating",
+    "blastRadiusPercentage",
+    "complianceClassification"
+  ]
+}

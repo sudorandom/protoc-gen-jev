@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package incident.v1;
+
+option go_package = "incident/v1;incidentv1";
+
+import "buf/validate/validate.proto";
+import "jev/v1/options.proto";
+
+enum PriorityLevel {
+  PRIORITY_LEVEL_UNSPECIFIED = 0;
+  PRIORITY_LEVEL_LOW = 1;
+  PRIORITY_LEVEL_MEDIUM = 2;
+  PRIORITY_LEVEL_HIGH = 3;
+  PRIORITY_LEVEL_CRITICAL = 4;
+}
+
+message IncidentTriage {
+  // 1. Oneof mutual exclusion -> Jev Choice question
+  // Jev selects the single most appropriate routing target based on input context.
+  oneof routing_target {
+    string automated_runbook = 1;
+    string oncall_engineer = 2;
+    string incident_commander = 3;
+  }
+
+  // 2. Boolean field -> Jev Noul question
+  // Evaluates binary intent with a calibrated confidence threshold (0.0 - 1.0).
+  bool requires_immediate_paging = 4 [
+    (jev.v1.field).instructions = "Does this incident indicate active user-facing outage requiring paging?",
+    (jev.v1.field).threshold = 0.85
+  ];
+
+  // 3. Enum field -> Jev Choice question
+  // Uses protovalidate's defined_only rule (all non-unspecified values are choices).
+  PriorityLevel priority = 5 [
+    (buf.validate.field).enum.defined_only = true,
+    (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
+    (jev.v1.field).criteria = {
+      key: "PRIORITY_LEVEL_CRITICAL",
+      value: "Complete service outage affecting >10% of traffic"
+    },
+    (jev.v1.field).criteria = {
+      key: "PRIORITY_LEVEL_HIGH",
+      value: "Significant latency spike or core feature degradation"
+    },
+    (jev.v1.field).criteria = {
+      key: "PRIORITY_LEVEL_MEDIUM",
+      value: "Isolated component failure with working fallback"
+    },
+    (jev.v1.field).criteria = {
+      key: "PRIORITY_LEVEL_LOW",
+      value: "Minor cosmetic or non-customer-impacting bug"
+    }
+  ];
+
+  // 4. Bounded integer range (<= 10) -> Jev Score with exact sequence rubric [1, 2, 3, 4, 5]
+  int32 urgency_rating = 6 [
+    (buf.validate.field).int32 = { gte: 1, lte: 5 },
+    (jev.v1.field).instructions = "How urgently does this issue need to be resolved?"
+  ];
+
+  // 5. Continuous numeric scale -> Jev Score with 5-tier interpolated rubric [0.0, 25.0, 50.0, 75.0, 100.0]
+  float blast_radius_percentage = 7 [
+    (jev.v1.field).instructions = "Estimated percentage of production infrastructure impacted",
+    (jev.v1.field).min = 0.0,
+    (jev.v1.field).max = 100.0
+  ];
+
+  // 6. String with discrete allowed values -> Jev Choice question
+  string compliance_classification = 8 [
+    (buf.validate.field).string = { in: ["PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII", "PCI_DSS"] },
+    (jev.v1.field).instructions = "Categorize any sensitive or regulated data exposed in the incident report"
+  ];
+
+  // 7. Skipped fields -> Excluded from Jev decision payload
+  // Ideal for freeform logs, identifiers, or downstream output fields.
+  string incident_id = 9 [(jev.v1.field).skip = true];
+  string raw_stack_trace = 10 [(jev.v1.field).skip = true];
+}

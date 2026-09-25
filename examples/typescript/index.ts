@@ -1,30 +1,21 @@
 import { TypeSafeClient } from "@typesafe-ai/sdk";
-import { RuleTestRecordJevClient } from "../../gen/jev/ai/rules/v1/rules_jev";
+import { IncidentTriageJevClient } from "../gen/jev/incident/v1/incident_jev.js";
 
 // MockTypeSafeClient simulates Jev responses when running offline without an API key.
-class MockTypeSafeClient extends TypeSafeClient {
-  constructor() {
-    super({ apiKey: "mock-api-key" });
-  }
-
-  async systemOne(params: { state: any; questions: Record<string, any> }): Promise<any> {
+class MockTypeSafeClient {
+  async systemOne(_params: { state: any; questions: Record<string, any> }): Promise<any> {
     return {
       choices: {
-        delivery_method: { choice: "push_notification" },
-        executionMode: { choice: "MODE_FAST" },
-        filteredMode: { choice: "MODE_BALANCED" },
-        securityClearance: { choice: "TOP_SECRET" },
-        decisionFlag: { choice: "APPROVE" },
+        routing_target: { choice: "oncall_engineer" },
+        priority: { choice: "PRIORITY_LEVEL_HIGH" },
+        complianceClassification: { choice: "INTERNAL_CONFIDENTIAL" },
       },
-      nouls: {},
+      nouls: {
+        requiresImmediatePaging: { result: true },
+      },
       scores: {
-        ratingSmall: { score: 5 },
-        ratingStrict: { score: 3 },
-        discreteCode: { score: 50 },
-        largeScale: { score: 500 },
-        temperature: { score: 25.0 },
-        discreteRatio: { score: 0.8 },
-        customBoundedScore: { score: 30.0 },
+        urgencyRating: { score: 4 },
+        blastRadiusPercentage: { score: 45.0 },
       },
     };
   }
@@ -36,15 +27,15 @@ async function main() {
   console.log("==================================================");
 
   const apiKey = process.env.TYPESAFE_API_KEY;
-  let client: RuleTestRecordJevClient;
+  let client: IncidentTriageJevClient;
 
   if (!apiKey) {
     console.log("\n[INFO] TYPESAFE_API_KEY not set in environment.");
     console.log("[INFO] Initializing client with simulated Jev client for offline demo...");
-    client = new RuleTestRecordJevClient(new MockTypeSafeClient());
+    client = new IncidentTriageJevClient(new MockTypeSafeClient() as unknown as TypeSafeClient);
   } else {
     console.log("\n[INFO] Using live TypeSafe AI Jev SDK with TYPESAFE_API_KEY");
-    client = new RuleTestRecordJevClient();
+    client = new IncidentTriageJevClient();
   }
 
   // 1. Inspect generated questions
@@ -60,30 +51,30 @@ async function main() {
 
   // 2. Evaluate single input state
   const state = {
-    userId: "usr_99881",
-    requestType: "security_dispatch",
-    priority: "critical",
-    text: "Automated alert: unauthorized container execution detected in production cluster.",
+    incident_id: "INC-8891",
+    title: "Database connection pool exhausted",
+    description: "API latency increased to 4500ms and 500 errors spike to 12%",
+    raw_logs: "Connection refused on port 5432 after 100 pool max connections",
   };
 
-  console.log("\n2. Evaluating Single State...");
+  console.log("\n2. Evaluating Single Incident State...");
   const decision = await client.evaluate(state);
   console.log("✔ Decision received:");
   console.log(JSON.stringify(decision, null, 2));
 
   // 3. Batch evaluation
-  console.log("\n3. Batch Evaluating 3 States...");
+  console.log("\n3. Batch Evaluating 3 Incident States...");
   const batchStates = [
-    "Batch Item 1: Ingress latency spike detected",
-    "Batch Item 2: Critical vulnerability signature matched",
-    "Batch Item 3: Routine memory compaction completed",
+    "Batch Item 1: Ingress 502 bad gateway spikes across region us-east-1",
+    "Batch Item 2: Low-priority deprecation warning logged in analytics service",
+    "Batch Item 3: Routine memory compaction completed without customer impact",
   ];
 
   const batchDecisions = await client.batchEvaluate(batchStates);
   console.log(`✔ Successfully evaluated ${batchDecisions.length} batch items.`);
   batchDecisions.forEach((d, idx) => {
     console.log(
-      `  - Item [${idx + 1}]: DeliveryMethod=${d.delivery_method}, RatingSmall=${d.ratingSmall}, Clearance=${d.securityClearance}`
+      `  - Item [${idx + 1}]: RoutingTarget=${d.routing_target}, Paging=${d.requiresImmediatePaging}, Priority=${d.priority}, Urgency=${d.urgencyRating}, BlastRadius=${d.blastRadiusPercentage}%`
     );
   });
 

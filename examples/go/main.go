@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 
-	rulesv1 "github.com/sudorandom/protoc-gen-jev/gen/jev/ai/rules/v1"
+	incidentv1 "github.com/sudorandom/protoc-gen-jev/examples/gen/jev/incident/v1"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 	apiKey := os.Getenv("TYPESAFE_API_KEY")
 	var mockServer *httptest.Server
 
-	client := rulesv1.NewRuleTestRecordJevClient(apiKey)
+	client := incidentv1.NewIncidentTriageJevClient(apiKey)
 
 	if apiKey == "" {
 		fmt.Println("\n[INFO] TYPESAFE_API_KEY not set in environment.")
@@ -28,20 +28,16 @@ func main() {
 		mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := map[string]any{
 				"choices": map[string]any{
-					"delivery_method":   map[string]any{"choice": "push_notification"},
-					"executionMode":     map[string]any{"choice": "MODE_FAST"},
-					"filteredMode":      map[string]any{"choice": "MODE_BALANCED"},
-					"securityClearance": map[string]any{"choice": "TOP_SECRET"},
-					"decisionFlag":      map[string]any{"choice": "APPROVE"},
+					"routing_target":           map[string]any{"choice": "oncall_engineer"},
+					"priority":                 map[string]any{"choice": "PRIORITY_LEVEL_HIGH"},
+					"complianceClassification": map[string]any{"choice": "INTERNAL_CONFIDENTIAL"},
+				},
+				"nouls": map[string]any{
+					"requiresImmediatePaging": map[string]any{"result": true},
 				},
 				"scores": map[string]any{
-					"ratingSmall":        map[string]any{"score": 5},
-					"ratingStrict":       map[string]any{"score": 3},
-					"discreteCode":       map[string]any{"score": 50},
-					"largeScale":         map[string]any{"score": 500},
-					"temperature":        map[string]any{"score": 25.0},
-					"discreteRatio":      map[string]any{"score": 0.8},
-					"customBoundedScore": map[string]any{"score": 30.0},
+					"urgencyRating":         map[string]any{"score": 4},
+					"blastRadiusPercentage": map[string]any{"score": 45.0},
 				},
 			}
 			_ = json.NewEncoder(w).Encode(resp)
@@ -61,13 +57,13 @@ func main() {
 
 	// 2. Evaluate single input state
 	state := map[string]any{
-		"user_id":      "usr_10492",
-		"request_type": "expedited_transfer",
-		"priority":     "high",
-		"text":         "Urgent security request: please authorize immediately and send via push notification",
+		"incident_id": "INC-8891",
+		"title":       "Database connection pool exhausted",
+		"description": "API latency increased to 4500ms and 500 errors spike to 12%",
+		"raw_logs":    "Connection refused on port 5432 after 100 pool max connections",
 	}
 
-	fmt.Println("\n2. Evaluating Single State...")
+	fmt.Println("\n2. Evaluating Single Incident State...")
 	ctx := context.Background()
 	decision, err := client.Evaluate(ctx, state)
 	if err != nil {
@@ -79,11 +75,11 @@ func main() {
 	fmt.Printf("✔ Decision received:\n%s\n", string(decJSON))
 
 	// 3. Batch evaluation
-	fmt.Println("\n3. Batch Evaluating 3 States...")
+	fmt.Println("\n3. Batch Evaluating 3 Incident States...")
 	batchStates := []any{
-		"Batch Item 1: Standard alert",
-		"Batch Item 2: High security alert",
-		"Batch Item 3: Operational check",
+		"Batch Item 1: Ingress 502 bad gateway spikes across region us-east-1",
+		"Batch Item 2: Low-priority deprecation warning logged in analytics service",
+		"Batch Item 3: Routine memory compaction completed without customer impact",
 	}
 
 	batchDecisions, err := client.BatchEvaluate(ctx, batchStates)
@@ -94,8 +90,8 @@ func main() {
 
 	fmt.Printf("✔ Successfully evaluated %d batch items.\n", len(batchDecisions))
 	for i, d := range batchDecisions {
-		fmt.Printf("  - Item [%d]: DeliveryMethod=%s, RatingSmall=%.0f, Clearance=%s\n",
-			i+1, d.DeliveryMethod, d.RatingSmall, d.SecurityClearance)
+		fmt.Printf("  - Item [%d]: RoutingTarget=%s, Paging=%t, Priority=%s, Urgency=%.0f, BlastRadius=%.1f%%\n",
+			i+1, d.RoutingTarget, d.RequiresImmediatePaging, d.Priority, d.UrgencyRating, d.BlastRadiusPercentage)
 	}
 
 	fmt.Println("\n✔ Go End-to-End Test PASSED successfully!")
