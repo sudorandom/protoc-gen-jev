@@ -67,6 +67,11 @@ just test
 # Update golden files after intentional changes
 just update-golden
 
-# Run linters (buf lint, go vet)
+# Run linters (buf lint, go vet, golangci-lint)
 just lint
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
