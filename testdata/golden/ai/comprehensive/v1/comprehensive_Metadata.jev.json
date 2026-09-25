@@ -1,0 +1,23 @@
+{
+  "message_name": "Metadata",
+  "package": "ai.comprehensive.v1",
+  "questions": {
+    "version": {
+      "type": "Score",
+      "instructions": "Evaluate version",
+      "criteria": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "proto_field": "version",
+      "json_field": "version",
+      "go_field": "Version"
+    }
+  },
+  "order": [
+    "version"
+  ]
+}

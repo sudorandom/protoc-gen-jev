@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package jev.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "protoc-gen-jev/pkg/jev/v1;jevv1";
+
+extend google.protobuf.FieldOptions {
+  FieldOptions field = 50001;
+}
+
+message FieldOptions {
+  // Explicit instructions for Jev to evaluate this field.
+  // If omitted, the field's Protobuf doc comment is used.
+  string instructions = 1;
+
+  // If true, Jev will skip evaluating this field (e.g. for freeform text or downstream fields).
+  bool skip = 2;
+
+  // For boolean (Noul): confidence threshold [0.0 - 1.0] to evaluate as true.
+  float threshold = 3;
+
+  // For numeric ranges (Score): minimum value (default: 0).
+  float min = 4;
+
+  // For numeric ranges (Score): maximum value (default: 100).
+  float max = 5;
+
+  // For enums (Choice): optional guidance/criteria for specific options.
+  map<string, string> criteria = 6;
+}

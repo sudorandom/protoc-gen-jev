@@ -1,0 +1,23 @@
+{
+  "message_name": "Entity",
+  "package": "ai.analysis.v1",
+  "questions": {
+    "relevance": {
+      "type": "Score",
+      "instructions": "Relevance score from 0.0 to 1.0.",
+      "criteria": [
+        "0.0",
+        "0.25",
+        "0.5",
+        "0.75",
+        "1.0"
+      ],
+      "proto_field": "relevance",
+      "json_field": "relevance",
+      "go_field": "Relevance"
+    }
+  },
+  "order": [
+    "relevance"
+  ]
+}

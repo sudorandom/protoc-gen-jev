@@ -1,0 +1,8 @@
+version: v2
+inputs:
+  - directory: testdata/proto
+plugins:
+  - local: ./protoc-gen-jev
+    out: gen/jev
+    opt:
+      - targets=all

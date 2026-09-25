@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package ai.comprehensive.v1;
+
+option go_package = "ai/comprehensive/v1;comprehensivev1";
+
+import "buf/validate/validate.proto";
+import "jev/v1/options.proto";
+
+// An enum demonstrating valid options.
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_PAUSED = 2;
+  STATUS_ARCHIVED = 3;
+}
+
+// A nested message for testing object properties.
+message Metadata {
+  string source = 1 [(buf.validate.field).string.min_len = 1];
+  int32 version = 2 [(buf.validate.field).int32.gt = 0];
+}
+
+// Comprehensive test message exercising every option and rule combination.
+message ComprehensiveRecord {
+  // --- String validation variants ---
+  string text_bounded = 1 [
+    (buf.validate.field).string.min_len = 3,
+    (buf.validate.field).string.max_len = 50
+  ];
+
+  string email_address = 2 [
+    (buf.validate.field).string.email = true
+  ];
+
+  string website_url = 3 [
+    (buf.validate.field).string.uri = true
+  ];
+
+  string custom_pattern = 4 [
+    (buf.validate.field).string.pattern = "^ID-[0-9]{4}$"
+  ];
+
+  string prefixed_code = 5 [
+    (buf.validate.field).string.prefix = "CODE_"
+  ];
+
+  // --- Numeric validation variants ---
+  int32 score_int = 6 [
+    (buf.validate.field).int32.gte = 1,
+    (buf.validate.field).int32.lte = 100
+  ];
+
+  int64 big_count = 7 [
+    (buf.validate.field).int64.gt = 0
+  ];
+
+  float ratio = 8 [
+    (buf.validate.field).float.finite = true,
+    (buf.validate.field).float.gte = 0.0,
+    (buf.validate.field).float.lte = 1.0
+  ];
+
+  double latitude = 9 [
+    (buf.validate.field).double.gte = -90.0,
+    (buf.validate.field).double.lte = 90.0
+  ];
+
+  // --- Boolean & Enum ---
+  bool is_enabled = 10;
+
+  Status status = 11 [
+    (buf.validate.field).enum.defined_only = true
+  ];
+
+  // --- Repeated / Arrays ---
+  repeated string tags = 12 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 5,
+    (buf.validate.field).repeated.unique = true
+  ];
+
+  // --- Nested message ---
+  Metadata metadata = 13;
+
+  // --- Optional field ---
+  optional string notes = 14;
+
+  // --- Map ---
+  map<string, string> attributes = 15;
+
+  // --- Oneof ---
+  oneof payload {
+    string text_payload = 16;
+    bytes binary_payload = 17;
+  }
+
+  // --- Jev custom options testing ---
+  bool churn_risk = 18 [
+    (jev.v1.field).instructions = "Custom Jev instruction: assess customer cancellation intent"
+  ];
+
+  string internal_debug_info = 19 [
+    (jev.v1.field).skip = true
+  ];
+
+  // Discrete string choices via protovalidate rule
+  string account_tier = 20 [
+    (buf.validate.field).string = {
+      in: ["TIER_STANDARD", "TIER_PREMIUM", "TIER_ENTERPRISE"]
+    }
+  ];
+}

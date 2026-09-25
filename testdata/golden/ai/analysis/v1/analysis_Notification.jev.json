@@ -1,0 +1,21 @@
+{
+  "message_name": "Notification",
+  "package": "ai.analysis.v1",
+  "questions": {
+    "channel": {
+      "type": "Choice",
+      "instructions": "Select channel variant",
+      "criteria": {
+        "email": null,
+        "slack_channel": null,
+        "webhook_url": null
+      },
+      "proto_field": "channel",
+      "json_field": "channel",
+      "go_field": "Channel"
+    }
+  },
+  "order": [
+    "channel"
+  ]
+}

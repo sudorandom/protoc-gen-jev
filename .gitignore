@@ -1,0 +1,14 @@
+# Binaries
+protoc-gen-jev
+*.exe
+*.test
+
+# Generated files during local dev / test runs
+gen/
+node_modules/
+__pycache__/
+*.pyc
+
+# OS artifacts
+.DS_Store
+

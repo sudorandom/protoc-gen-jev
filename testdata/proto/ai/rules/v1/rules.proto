@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package ai.rules.v1;
+
+option go_package = "ai/rules/v1;rulesv1";
+
+import "buf/validate/validate.proto";
+import "jev/v1/options.proto";
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  MODE_FAST = 1;
+  MODE_BALANCED = 2;
+  MODE_ACCURATE = 3;
+  MODE_DEBUG = 4;
+}
+
+message RuleTestRecord {
+  // 1. Oneof mutual exclusion -> maps to Choice
+  oneof delivery_method {
+    string email = 1;
+    string sms = 2;
+    string push_notification = 3;
+  }
+
+  // 2. Proto3 optional (synthetic oneof) -> must NOT be treated as a oneof Choice!
+  optional string optional_note = 4;
+
+  // 3. Enum restricted by enum.in -> Choice with only [MODE_FAST, MODE_BALANCED]
+  Mode execution_mode = 5 [
+    (buf.validate.field).enum = { in: [1, 2] }
+  ];
+
+  // 4. Enum restricted by enum.not_in -> Choice omitting MODE_DEBUG
+  Mode filtered_mode = 6 [
+    (buf.validate.field).enum = { not_in: [4] }
+  ];
+
+  // 5. Integer with small range (<= 10) -> exact sequence [1..5]
+  int32 rating_small = 7 [
+    (buf.validate.field).int32 = { gte: 1, lte: 5 }
+  ];
+
+  // 6. Integer with strict bounds (gt/lt) -> [1, 2, 3]
+  int32 rating_strict = 8 [
+    (buf.validate.field).int32 = { gt: 0, lt: 4 }
+  ];
+
+  // 7. Integer with discrete allowed values -> ["10", "20", "50", "100"]
+  int32 discrete_code = 9 [
+    (buf.validate.field).int32 = { in: [10, 20, 50, 100] }
+  ];
+
+  // 8. Large integer range -> 5-tier interpolated rubric [0, 250, 500, 750, 1000]
+  int64 large_scale = 10 [
+    (buf.validate.field).int64 = { gte: 0, lte: 1000 }
+  ];
+
+  // 9. Float continuous range -> 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]
+  float temperature = 11 [
+    (buf.validate.field).float = { gte: -40.0, lte: 60.0 }
+  ];
+
+  // 10. Float discrete values -> ["0.2", "0.5", "0.8"]
+  float discrete_ratio = 12 [
+    (buf.validate.field).float = { in: [0.2, 0.5, 0.8] }
+  ];
+
+  // 11. String with allowed set of values -> Choice
+  string security_clearance = 13 [
+    (buf.validate.field).string = { in: ["PUBLIC", "SECRET", "TOP_SECRET"] }
+  ];
+
+  // 12. String with custom Jev criteria options -> Choice
+  string decision_flag = 14 [
+    (jev.v1.field).criteria = {
+      key: "APPROVE",
+      value: "Request approved"
+    },
+    (jev.v1.field).criteria = {
+      key: "REJECT",
+      value: "Request rejected"
+    }
+  ];
+
+  // 13. Float with custom Jev min/max options -> [10.0, 20.0, 30.0, 40.0, 50.0]
+  float custom_bounded_score = 15 [
+    (jev.v1.field).min = 10,
+    (jev.v1.field).max = 50
+  ];
+
+  // 14. Explicitly skipped field -> MUST NOT appear in questions
+  string secret_token = 16 [
+    (jev.v1.field).skip = true
+  ];
+
+  // 15. Freeform text without rules -> omitted from Jev questions
+  string freeform_description = 17;
+}

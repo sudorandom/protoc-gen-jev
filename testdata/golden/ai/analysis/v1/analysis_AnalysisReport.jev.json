@@ -1,0 +1,36 @@
+{
+  "message_name": "AnalysisReport",
+  "package": "ai.analysis.v1",
+  "questions": {
+    "confidenceScore": {
+      "type": "Score",
+      "instructions": "Confidence score of the overall analysis between 0.0 and 1.0.",
+      "criteria": [
+        "0.0",
+        "0.25",
+        "0.5",
+        "0.75",
+        "1.0"
+      ],
+      "proto_field": "confidence_score",
+      "json_field": "confidenceScore",
+      "go_field": "ConfidenceScore"
+    },
+    "sentiment": {
+      "type": "Choice",
+      "instructions": "Overall sentiment detected in the text.",
+      "criteria": {
+        "SENTIMENT_NEGATIVE": null,
+        "SENTIMENT_NEUTRAL": null,
+        "SENTIMENT_POSITIVE": null
+      },
+      "proto_field": "sentiment",
+      "json_field": "sentiment",
+      "go_field": "Sentiment"
+    }
+  },
+  "order": [
+    "sentiment",
+    "confidenceScore"
+  ]
+}

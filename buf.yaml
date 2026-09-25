@@ -1,0 +1,6 @@
+version: v2
+modules:
+  - path: proto
+  - path: testdata/proto
+deps:
+  - buf.build/bufbuild/protovalidate

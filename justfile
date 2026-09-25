@@ -1,0 +1,95 @@
+# Justfile for protoc-gen-jev
+set shell := ["bash", "-c"]
+
+# Default recipe: lint and run all tests
+default: lint test
+
+# ------------------------------------------------------------------------------
+# Build & Generation
+# ------------------------------------------------------------------------------
+
+# Compile the protoc-gen-jev binary
+build:
+	@echo "Building protoc-gen-jev..."
+	go build -o protoc-gen-jev .
+	@echo "✔ Binary built: ./protoc-gen-jev"
+
+# Generate code using buf
+generate: build
+	@echo "Running buf generate..."
+	buf generate
+	@echo "✔ Code generation complete."
+
+# ------------------------------------------------------------------------------
+# Testing & Golden Files
+# ------------------------------------------------------------------------------
+
+# Run syntax and type checks across all generated languages
+test-syntax: generate
+	@echo "Checking generated Go code..."
+	go vet ./gen/jev/...
+	@echo "Checking generated Python syntax..."
+	python -c "import py_compile, glob; [py_compile.compile(f, doraise=True) for f in glob.glob('gen/jev/**/*.py', recursive=True)]"
+	@echo "Checking generated TypeScript type signatures..."
+	npx --package typescript tsc --noEmit --skipLibCheck testdata/types/@typesafe-ai/sdk/index.d.ts `find gen/jev -name "*.ts"`
+	@echo "✔ Generated Go, Python, and TypeScript code verified."
+
+# Run all unit tests, syntax checks, and golden file verification
+test: generate test-syntax
+	@echo "Running Go tests..."
+	go test -v ./internal/... ./cmd/... .
+
+# Run real end-to-end examples across all languages (Go, Python, TypeScript)
+run-examples: generate
+	@echo "=== Running Go Example ==="
+	go run examples/go/main.go
+	@echo ""
+	@echo "=== Running Python Example ==="
+	python examples/python/main.py
+	@echo ""
+	@echo "=== Running TypeScript Example ==="
+	NODE_PATH="{{ justfile_directory() }}/examples/typescript/node_modules" npx --prefix examples/typescript tsx examples/typescript/index.ts
+	@echo ""
+	@echo "✔ All language examples completed successfully!"
+
+
+
+# Update golden files with newly generated files
+update-golden: generate
+	@echo "Updating golden files..."
+	mkdir -p testdata/golden
+	rm -rf testdata/golden/*
+	cp -r gen/jev/* testdata/golden/
+	@echo "✔ Golden files updated in testdata/golden"
+
+# Delete existing golden files
+clean-golden:
+	@echo "Deleting golden files..."
+	rm -rf testdata/golden
+	@echo "✔ Golden files removed."
+
+# ------------------------------------------------------------------------------
+# Linting & Formatting
+# ------------------------------------------------------------------------------
+
+# Run all linters
+lint:
+	@echo "Linting protobuf files..."
+	buf lint
+	@echo "Running go vet..."
+	go vet ./internal/... ./cmd/... .
+
+# Format all Go code
+format:
+	@echo "Formatting Go code..."
+	go fmt ./...
+
+# ------------------------------------------------------------------------------
+# Cleanup
+# ------------------------------------------------------------------------------
+
+# Clean build artifacts and generated files
+clean:
+	@echo "Cleaning artifacts..."
+	rm -rf gen/ protoc-gen-jev
+	@echo "✔ Clean complete."

@@ -1,0 +1,122 @@
+{
+  "message_name": "ComprehensiveRecord",
+  "package": "ai.comprehensive.v1",
+  "questions": {
+    "accountTier": {
+      "type": "Choice",
+      "instructions": "Discrete string choices via protovalidate rule",
+      "criteria": {
+        "TIER_ENTERPRISE": null,
+        "TIER_PREMIUM": null,
+        "TIER_STANDARD": null
+      },
+      "proto_field": "account_tier",
+      "json_field": "accountTier",
+      "go_field": "AccountTier"
+    },
+    "bigCount": {
+      "type": "Score",
+      "instructions": "Evaluate bigCount",
+      "criteria": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "proto_field": "big_count",
+      "json_field": "bigCount",
+      "go_field": "BigCount"
+    },
+    "churnRisk": {
+      "type": "Noul",
+      "instructions": "Custom Jev instruction: assess customer cancellation intent",
+      "proto_field": "churn_risk",
+      "json_field": "churnRisk",
+      "go_field": "ChurnRisk"
+    },
+    "isEnabled": {
+      "type": "Noul",
+      "instructions": "--- Boolean \u0026 Enum ---",
+      "proto_field": "is_enabled",
+      "json_field": "isEnabled",
+      "go_field": "IsEnabled"
+    },
+    "latitude": {
+      "type": "Score",
+      "instructions": "Evaluate latitude",
+      "criteria": [
+        "-90.0",
+        "-45.0",
+        "0.0",
+        "45.0",
+        "90.0"
+      ],
+      "proto_field": "latitude",
+      "json_field": "latitude",
+      "go_field": "Latitude"
+    },
+    "payload": {
+      "type": "Choice",
+      "instructions": "--- Oneof ---",
+      "criteria": {
+        "binary_payload": null,
+        "text_payload": null
+      },
+      "proto_field": "payload",
+      "json_field": "payload",
+      "go_field": "Payload"
+    },
+    "ratio": {
+      "type": "Score",
+      "instructions": "Evaluate ratio",
+      "criteria": [
+        "0.0",
+        "0.25",
+        "0.5",
+        "0.75",
+        "1.0"
+      ],
+      "proto_field": "ratio",
+      "json_field": "ratio",
+      "go_field": "Ratio"
+    },
+    "scoreInt": {
+      "type": "Score",
+      "instructions": "--- Numeric validation variants ---",
+      "criteria": [
+        "1",
+        "26",
+        "51",
+        "75",
+        "100"
+      ],
+      "proto_field": "score_int",
+      "json_field": "scoreInt",
+      "go_field": "ScoreInt"
+    },
+    "status": {
+      "type": "Choice",
+      "instructions": "Evaluate status",
+      "criteria": {
+        "STATUS_ACTIVE": null,
+        "STATUS_ARCHIVED": null,
+        "STATUS_PAUSED": null
+      },
+      "proto_field": "status",
+      "json_field": "status",
+      "go_field": "Status"
+    }
+  },
+  "order": [
+    "scoreInt",
+    "bigCount",
+    "ratio",
+    "latitude",
+    "isEnabled",
+    "status",
+    "payload",
+    "churnRisk",
+    "accountTier"
+  ]
+}

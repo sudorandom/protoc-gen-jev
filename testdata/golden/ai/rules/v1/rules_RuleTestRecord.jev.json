@@ -1,0 +1,171 @@
+{
+  "message_name": "RuleTestRecord",
+  "package": "ai.rules.v1",
+  "questions": {
+    "customBoundedScore": {
+      "type": "Score",
+      "instructions": "13. Float with custom Jev min/max options -\u003e [10.0, 20.0, 30.0, 40.0, 50.0]",
+      "criteria": [
+        "10.0",
+        "20.0",
+        "30.0",
+        "40.0",
+        "50.0"
+      ],
+      "proto_field": "custom_bounded_score",
+      "json_field": "customBoundedScore",
+      "go_field": "CustomBoundedScore"
+    },
+    "decisionFlag": {
+      "type": "Choice",
+      "instructions": "12. String with custom Jev criteria options -\u003e Choice",
+      "criteria": {
+        "APPROVE": null,
+        "REJECT": null
+      },
+      "proto_field": "decision_flag",
+      "json_field": "decisionFlag",
+      "go_field": "DecisionFlag"
+    },
+    "delivery_method": {
+      "type": "Choice",
+      "instructions": "1. Oneof mutual exclusion -\u003e maps to Choice",
+      "criteria": {
+        "email": null,
+        "push_notification": null,
+        "sms": null
+      },
+      "proto_field": "delivery_method",
+      "json_field": "delivery_method",
+      "go_field": "DeliveryMethod"
+    },
+    "discreteCode": {
+      "type": "Score",
+      "instructions": "7. Integer with discrete allowed values -\u003e [\"10\", \"20\", \"50\", \"100\"]",
+      "criteria": [
+        "10",
+        "20",
+        "50",
+        "100"
+      ],
+      "proto_field": "discrete_code",
+      "json_field": "discreteCode",
+      "go_field": "DiscreteCode"
+    },
+    "discreteRatio": {
+      "type": "Score",
+      "instructions": "10. Float discrete values -\u003e [\"0.2\", \"0.5\", \"0.8\"]",
+      "criteria": [
+        "0.2",
+        "0.5",
+        "0.8"
+      ],
+      "proto_field": "discrete_ratio",
+      "json_field": "discreteRatio",
+      "go_field": "DiscreteRatio"
+    },
+    "executionMode": {
+      "type": "Choice",
+      "instructions": "3. Enum restricted by enum.in -\u003e Choice with only [MODE_FAST, MODE_BALANCED]",
+      "criteria": {
+        "MODE_BALANCED": null,
+        "MODE_FAST": null
+      },
+      "proto_field": "execution_mode",
+      "json_field": "executionMode",
+      "go_field": "ExecutionMode"
+    },
+    "filteredMode": {
+      "type": "Choice",
+      "instructions": "4. Enum restricted by enum.not_in -\u003e Choice omitting MODE_DEBUG",
+      "criteria": {
+        "MODE_ACCURATE": null,
+        "MODE_BALANCED": null,
+        "MODE_FAST": null
+      },
+      "proto_field": "filtered_mode",
+      "json_field": "filteredMode",
+      "go_field": "FilteredMode"
+    },
+    "largeScale": {
+      "type": "Score",
+      "instructions": "8. Large integer range -\u003e 5-tier interpolated rubric [0, 250, 500, 750, 1000]",
+      "criteria": [
+        "0",
+        "250",
+        "500",
+        "750",
+        "1000"
+      ],
+      "proto_field": "large_scale",
+      "json_field": "largeScale",
+      "go_field": "LargeScale"
+    },
+    "ratingSmall": {
+      "type": "Score",
+      "instructions": "5. Integer with small range (\u003c= 10) -\u003e exact sequence [1..5]",
+      "criteria": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "proto_field": "rating_small",
+      "json_field": "ratingSmall",
+      "go_field": "RatingSmall"
+    },
+    "ratingStrict": {
+      "type": "Score",
+      "instructions": "6. Integer with strict bounds (gt/lt) -\u003e [1, 2, 3]",
+      "criteria": [
+        "1",
+        "2",
+        "3"
+      ],
+      "proto_field": "rating_strict",
+      "json_field": "ratingStrict",
+      "go_field": "RatingStrict"
+    },
+    "securityClearance": {
+      "type": "Choice",
+      "instructions": "11. String with allowed set of values -\u003e Choice",
+      "criteria": {
+        "PUBLIC": null,
+        "SECRET": null,
+        "TOP_SECRET": null
+      },
+      "proto_field": "security_clearance",
+      "json_field": "securityClearance",
+      "go_field": "SecurityClearance"
+    },
+    "temperature": {
+      "type": "Score",
+      "instructions": "9. Float continuous range -\u003e 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]",
+      "criteria": [
+        "-40.0",
+        "-15.0",
+        "10.0",
+        "35.0",
+        "60.0"
+      ],
+      "proto_field": "temperature",
+      "json_field": "temperature",
+      "go_field": "Temperature"
+    }
+  },
+  "order": [
+    "delivery_method",
+    "executionMode",
+    "filteredMode",
+    "ratingSmall",
+    "ratingStrict",
+    "discreteCode",
+    "largeScale",
+    "temperature",
+    "discreteRatio",
+    "securityClearance",
+    "decisionFlag",
+    "customBoundedScore"
+  ]
+}
