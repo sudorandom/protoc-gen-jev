@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -77,15 +76,7 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 			continue
 		}
 
-		// 3. Check for protovalidate field rules
-		var fieldRule *validate.FieldRules
-		if proto.HasExtension(desc.Options(), validate.E_Field) {
-			if rule, ok := proto.GetExtension(desc.Options(), validate.E_Field).(*validate.FieldRules); ok && rule != nil {
-				fieldRule = rule
-			}
-		}
-
-		// 4. Resolve instructions: custom option takes priority, then doc comment, then fallback
+		// 3. Resolve instructions: custom option takes priority, then doc comment, then fallback
 		instructions := CleanComments(field.Comments.Leading.String())
 		if customInstructions != "" {
 			instructions = customInstructions
@@ -95,10 +86,10 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 
 		goFieldName := ToPascalCase(desc.JSONName())
 
-		// 5. Map Protobuf kind and protovalidate rules to Jev primitive
+		// 4. Map Protobuf kind and jev.v1.field options to Jev primitive
 		switch desc.Kind() {
 		case protoreflect.EnumKind:
-			criteria := resolveEnumCriteria(desc.Enum(), fieldRule, jevOpt)
+			criteria := resolveEnumCriteria(desc.Enum(), jevOpt)
 			if len(criteria) > 0 {
 				spec.Questions[desc.JSONName()] = model.Question{
 					Type:         model.TypeChoice,
@@ -112,7 +103,7 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 			}
 
 		case protoreflect.StringKind:
-			criteria := resolveStringCriteria(desc, fieldRule, jevOpt)
+			criteria := resolveStringCriteria(desc, jevOpt)
 			if len(criteria) > 0 {
 				spec.Questions[desc.JSONName()] = model.Question{
 					Type:         model.TypeChoice,
@@ -136,7 +127,7 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 			spec.Order = append(spec.Order, desc.JSONName())
 
 		case protoreflect.FloatKind, protoreflect.DoubleKind:
-			criteria := resolveFloatCriteria(desc, fieldRule, jevOpt)
+			criteria := resolveFloatCriteria(desc, jevOpt)
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeScore,
 				Instructions: instructions,
@@ -150,7 +141,7 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 		case protoreflect.Int32Kind, protoreflect.Int64Kind,
 			protoreflect.Sint32Kind, protoreflect.Sint64Kind,
 			protoreflect.Uint32Kind, protoreflect.Uint64Kind:
-			criteria := resolveIntCriteria(desc, fieldRule, jevOpt)
+			criteria := resolveIntCriteria(desc, jevOpt)
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeScore,
 				Instructions: instructions,
@@ -166,20 +157,19 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 	return spec
 }
 
-// resolveEnumCriteria respects protovalidate enum.in, enum.not_in, and custom criteria.
-func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, rule *validate.FieldRules, opt *jevv1.FieldOptions) map[string]any {
-	var inMap, notInMap map[int32]bool
-	if rule != nil && rule.GetEnum() != nil {
-		er := rule.GetEnum()
-		if len(er.In) > 0 {
-			inMap = make(map[int32]bool)
-			for _, v := range er.In {
-				inMap[v] = true
+// resolveEnumCriteria respects jev.v1.field choices, not_in, and criteria options.
+func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, opt *jevv1.FieldOptions) map[string]any {
+	var choicesMap, notInMap map[string]bool
+	if opt != nil {
+		if len(opt.GetChoices()) > 0 {
+			choicesMap = make(map[string]bool)
+			for _, v := range opt.GetChoices() {
+				choicesMap[v] = true
 			}
 		}
-		if len(er.NotIn) > 0 {
-			notInMap = make(map[int32]bool)
-			for _, v := range er.NotIn {
+		if len(opt.GetNotIn()) > 0 {
+			notInMap = make(map[string]bool)
+			for _, v := range opt.GetNotIn() {
 				notInMap[v] = true
 			}
 		}
@@ -194,10 +184,10 @@ func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, rule *validate.Fi
 		if valNum == 0 || strings.HasSuffix(valName, "_UNSPECIFIED") {
 			continue
 		}
-		if len(inMap) > 0 && !inMap[valNum] {
+		if len(choicesMap) > 0 && !choicesMap[valName] {
 			continue
 		}
-		if len(notInMap) > 0 && notInMap[valNum] {
+		if len(notInMap) > 0 && notInMap[valName] {
 			continue
 		}
 		criteria[valName] = nil
@@ -213,74 +203,35 @@ func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, rule *validate.Fi
 	return criteria
 }
 
-// resolveStringCriteria maps string fields to Choice when discrete values are enforced.
-func resolveStringCriteria(desc protoreflect.FieldDescriptor, rule *validate.FieldRules, opt *jevv1.FieldOptions) map[string]any {
+// resolveStringCriteria maps string fields to Choice when discrete values or criteria are configured.
+func resolveStringCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptions) map[string]any {
 	criteria := make(map[string]any)
-
-	// 1. protovalidate string.in
-	if rule != nil && rule.GetString() != nil {
-		sr := rule.GetString()
-		for _, val := range sr.In {
-			criteria[val] = nil
-		}
+	if opt == nil {
+		return criteria
 	}
 
-	// 2. Jev options criteria
-	if opt != nil && len(opt.GetCriteria()) > 0 {
-		for k := range opt.GetCriteria() {
-			criteria[k] = nil
-		}
+	for _, val := range opt.GetChoices() {
+		criteria[val] = nil
+	}
+	for k := range opt.GetCriteria() {
+		criteria[k] = nil
 	}
 
 	return criteria
 }
 
-// resolveIntCriteria calculates dynamic rubrics from int.in, int.gte/lte, and jev.v1.field min/max.
-func resolveIntCriteria(desc protoreflect.FieldDescriptor, rule *validate.FieldRules, opt *jevv1.FieldOptions) []string {
-	var inValues []int64
-	var hasMin, hasMax bool
-	var minVal, maxVal int64
-
-	// 1. protovalidate rules
-	if rule != nil {
-		if r := rule.GetInt32(); r != nil {
-			for _, v := range r.In {
-				inValues = append(inValues, int64(v))
-			}
-			if r.HasGte() {
-				hasMin = true
-				minVal = int64(r.GetGte())
-			} else if r.HasGt() {
-				hasMin = true
-				minVal = int64(r.GetGt()) + 1
-			}
-			if r.HasLte() {
-				hasMax = true
-				maxVal = int64(r.GetLte())
-			} else if r.HasLt() {
-				hasMax = true
-				maxVal = int64(r.GetLt()) - 1
-			}
-		} else if r := rule.GetInt64(); r != nil {
-			inValues = append(inValues, r.In...)
-			if r.HasGte() {
-				hasMin = true
-				minVal = r.GetGte()
-			} else if r.HasGt() {
-				hasMin = true
-				minVal = r.GetGt() + 1
-			}
-			if r.HasLte() {
-				hasMax = true
-				maxVal = r.GetLte()
-			} else if r.HasLt() {
-				hasMax = true
-				maxVal = r.GetLt() - 1
-			}
+// resolveIntCriteria calculates dynamic rubrics from scale, or min/max bounds.
+func resolveIntCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptions) []string {
+	if opt != nil && len(opt.GetScale()) > 0 {
+		var res []string
+		for _, v := range opt.GetScale() {
+			res = append(res, strconv.FormatInt(int64(v), 10))
 		}
+		return res
 	}
 
-	// 2. Custom Jev options min/max override
+	var hasMin, hasMax bool
+	var minVal, maxVal int64
 	if opt != nil && (opt.Min != 0 || opt.Max != 0) {
 		hasMin = true
 		hasMax = true
@@ -288,16 +239,6 @@ func resolveIntCriteria(desc protoreflect.FieldDescriptor, rule *validate.FieldR
 		maxVal = int64(opt.Max)
 	}
 
-	// 3. Explicit in list
-	if len(inValues) > 0 {
-		var res []string
-		for _, v := range inValues {
-			res = append(res, strconv.FormatInt(v, 10))
-		}
-		return res
-	}
-
-	// 4. Bound interpolation
 	if hasMin && hasMax && maxVal >= minVal {
 		count := maxVal - minVal + 1
 		if count <= 10 {
@@ -320,52 +261,18 @@ func resolveIntCriteria(desc protoreflect.FieldDescriptor, rule *validate.FieldR
 	return []string{"1", "2", "3", "4", "5"}
 }
 
-// resolveFloatCriteria calculates dynamic continuous rubrics from float.in, float.gte/lte, and jev.v1.field min/max.
-func resolveFloatCriteria(desc protoreflect.FieldDescriptor, rule *validate.FieldRules, opt *jevv1.FieldOptions) []string {
-	var inValues []float64
-	var hasMin, hasMax bool
-	var minVal, maxVal float64
-
-	// 1. protovalidate rules
-	if rule != nil {
-		if r := rule.GetFloat(); r != nil {
-			for _, v := range r.In {
-				inValues = append(inValues, float64(v))
-			}
-			if r.HasGte() {
-				hasMin = true
-				minVal = float64(r.GetGte())
-			} else if r.HasGt() {
-				hasMin = true
-				minVal = float64(r.GetGt())
-			}
-			if r.HasLte() {
-				hasMax = true
-				maxVal = float64(r.GetLte())
-			} else if r.HasLt() {
-				hasMax = true
-				maxVal = float64(r.GetLt())
-			}
-		} else if r := rule.GetDouble(); r != nil {
-			inValues = append(inValues, r.In...)
-			if r.HasGte() {
-				hasMin = true
-				minVal = r.GetGte()
-			} else if r.HasGt() {
-				hasMin = true
-				minVal = r.GetGt()
-			}
-			if r.HasLte() {
-				hasMax = true
-				maxVal = r.GetLte()
-			} else if r.HasLt() {
-				hasMax = true
-				maxVal = r.GetLt()
-			}
+// resolveFloatCriteria calculates dynamic rubrics from scale, or min/max bounds.
+func resolveFloatCriteria(desc protoreflect.FieldDescriptor, opt *jevv1.FieldOptions) []string {
+	if opt != nil && len(opt.GetScale()) > 0 {
+		var res []string
+		for _, v := range opt.GetScale() {
+			res = append(res, formatFloat(float64(v)))
 		}
+		return res
 	}
 
-	// 2. Custom Jev options min/max override
+	var hasMin, hasMax bool
+	var minVal, maxVal float64
 	if opt != nil && (opt.Min != 0 || opt.Max != 0) {
 		hasMin = true
 		hasMax = true
@@ -373,17 +280,7 @@ func resolveFloatCriteria(desc protoreflect.FieldDescriptor, rule *validate.Fiel
 		maxVal = float64(opt.Max)
 	}
 
-	// 3. Explicit in list
-	if len(inValues) > 0 {
-		var res []string
-		for _, v := range inValues {
-			res = append(res, formatFloat(v))
-		}
-		return res
-	}
-
-	// 4. Bound interpolation
-	if hasMin && hasMax && maxVal > minVal {
+	if hasMin && hasMax && maxVal >= minVal {
 		step := (maxVal - minVal) / 4.0
 		return []string{
 			formatFloat(minVal),
@@ -398,11 +295,13 @@ func resolveFloatCriteria(desc protoreflect.FieldDescriptor, rule *validate.Fiel
 }
 
 func formatFloat(v float64) string {
-	s := strconv.FormatFloat(v, 'g', 6, 64)
-	if !strings.Contains(s, ".") {
-		s += ".0"
+	// Round to 4 decimal places to prevent floating-point inaccuracies
+	v = math.Round(v*10000) / 10000
+	str := strconv.FormatFloat(v, 'f', -1, 64)
+	if !strings.Contains(str, ".") {
+		str += ".0"
 	}
-	return s
+	return str
 }
 
 // CleanComments strips slashes, spaces, and linebreaks from Protobuf comments.

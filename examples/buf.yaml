@@ -1,6 +1,0 @@
-version: v2
-modules:
-  - path: proto
-deps:
-  - buf.build/bufbuild/protovalidate
-  - buf.build/sudo-random/protoc-gen-jev

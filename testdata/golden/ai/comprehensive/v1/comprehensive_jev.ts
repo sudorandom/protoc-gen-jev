@@ -87,7 +87,7 @@ export class ComprehensiveRecordJevClient {
         "Custom Jev instruction: assess customer cancellation intent",
       ),
       accountTier: choice(
-        "Discrete string choices via protovalidate rule",
+        "Discrete string choices via Jev options",
         { "TIER_ENTERPRISE": null, "TIER_PREMIUM": null, "TIER_STANDARD": null },
       ),
     };

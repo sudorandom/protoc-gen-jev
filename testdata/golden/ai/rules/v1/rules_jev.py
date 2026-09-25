@@ -27,11 +27,11 @@ class RuleTestRecordJevClient:
                 criteria={"email": None, "push_notification": None, "sms": None},
             ),
             "executionMode": Choice(
-                instructions="3. Enum restricted by enum.in -> Choice with only [MODE_FAST, MODE_BALANCED]",
+                instructions="3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]",
                 criteria={"MODE_BALANCED": None, "MODE_FAST": None},
             ),
             "filteredMode": Choice(
-                instructions="4. Enum restricted by enum.not_in -> Choice omitting MODE_DEBUG",
+                instructions="4. Enum restricted by not_in -> Choice omitting MODE_DEBUG",
                 criteria={"MODE_ACCURATE": None, "MODE_BALANCED": None, "MODE_FAST": None},
             ),
             "ratingSmall": Score(
@@ -39,7 +39,7 @@ class RuleTestRecordJevClient:
                 criteria=["1", "2", "3", "4", "5"],
             ),
             "ratingStrict": Score(
-                instructions="6. Integer with strict bounds (gt/lt) -> [1, 2, 3]",
+                instructions="6. Integer with explicit scale -> [1, 2, 3]",
                 criteria=["1", "2", "3"],
             ),
             "discreteCode": Score(

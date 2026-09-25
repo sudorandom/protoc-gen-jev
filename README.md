@@ -50,18 +50,17 @@ plugins:
 
 ## Schema Definition & Field Options
 
-Import `jev/v1/options.proto` (and optionally `buf/validate/validate.proto`) to configure how fields map to Jev cognitive decisions.
+Import `jev/v1/options.proto` to configure how Protobuf fields map to Jev cognitive decisions. `protoc-gen-jev` is completely self-contained and has zero external dependencies (no `protovalidate` required).
 
 ### Comprehensive Example
 
-The example below models an **Incident Triage & Routing** system demonstrating all supported primitives and options:
+The example below models an **Incident Triage & Routing** system demonstrating all supported primitives and options (see [`examples/proto/incident/v1/incident.proto`](examples/proto/incident/v1/incident.proto)):
 
 ```protobuf
 syntax = "proto3";
 
 package incident.v1;
 
-import "buf/validate/validate.proto";
 import "jev/v1/options.proto";
 
 enum PriorityLevel {
@@ -88,10 +87,8 @@ message IncidentTriage {
     (jev.v1.field).threshold = 0.85
   ];
 
-  // 3. Enum field -> Jev Choice question
-  // Uses protovalidate's defined_only rule (all non-unspecified values are choices).
+  // 3. Enum field with criteria guidance -> Jev Choice question
   PriorityLevel priority = 5 [
-    (buf.validate.field).enum.defined_only = true,
     (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
     (jev.v1.field).criteria = {
       key: "PRIORITY_LEVEL_CRITICAL",
@@ -113,7 +110,8 @@ message IncidentTriage {
 
   // 4. Bounded integer range (<= 10) -> Jev Score with exact sequence rubric [1, 2, 3, 4, 5]
   int32 urgency_rating = 6 [
-    (buf.validate.field).int32 = { gte: 1, lte: 5 },
+    (jev.v1.field).min = 1,
+    (jev.v1.field).max = 5,
     (jev.v1.field).instructions = "How urgently does this issue need to be resolved?"
   ];
 
@@ -124,9 +122,12 @@ message IncidentTriage {
     (jev.v1.field).max = 100.0
   ];
 
-  // 6. String with discrete allowed values -> Jev Choice question
+  // 6. String with discrete allowed choices -> Jev Choice question
   string compliance_classification = 8 [
-    (buf.validate.field).string = { in: ["PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII", "PCI_DSS"] },
+    (jev.v1.field).choices = "PUBLIC",
+    (jev.v1.field).choices = "INTERNAL_CONFIDENTIAL",
+    (jev.v1.field).choices = "RESTRICTED_PII",
+    (jev.v1.field).choices = "PCI_DSS",
     (jev.v1.field).instructions = "Categorize any sensitive or regulated data exposed in the incident report"
   ];
 
@@ -144,24 +145,26 @@ message IncidentTriage {
 | `instructions` | `string` | Custom instructions / prompt sent to Jev. Defaults to the field's Protobuf doc comment if omitted. |
 | `skip` | `bool` | When `true`, completely skips this field during Jev evaluation (e.g. for raw text, IDs, or timestamps). |
 | `threshold` | `float` | For `bool` (`Noul`) questions: confidence threshold `[0.0 - 1.0]` required to evaluate as `true`. |
-| `min` | `float` | For numeric `Score` questions: the lower bound of the rubric scale (default: `0.0`). |
-| `max` | `float` | For numeric `Score` questions: the upper bound of the rubric scale (default: `100.0`). |
-| `criteria` | `map<string, string>` | Guidance or descriptive rubric criteria attached to specific options (labels $\to$ descriptions). |
+| `choices` | `repeated string` | For `string` or `enum` (`Choice`): explicit whitelist of allowed choice values. |
+| `not_in` | `repeated string` | For `enum` (`Choice`): blacklist of enum value names to exclude from choices. |
+| `scale` | `repeated float` | For numeric (`Score`): explicit discrete rubric tiers (e.g. `[1, 2, 3]` or `[10, 20, 50, 100]`). |
+| `min` | `float` | For numeric (`Score`): lower bound of rubric scale (default: `0.0`). |
+| `max` | `float` | For numeric (`Score`): upper bound of rubric scale (default: `100.0`). |
+| `criteria` | `map<string, string>` | Guidance or descriptive rubric criteria attached to specific options (labels $\to$ descriptions). When placed on a `string` field without `choices`, the map keys define the choices. |
 
-### Protovalidate (`buf.validate`) Mapping
+### Type & Primitive Mapping
 
-| Rule | Protobuf Type | Jev Primitive | Behavior |
-| :--- | :--- | :--- | :--- |
-| `oneof` | Mutual exclusion | **`Choice`** | Field names become the selectable choice options. |
-| `bool` | `bool` | **`Noul`** | Binary yes/no classification with calibrated probability. |
-| *(default / none)* | `enum` | **`Choice`** | All defined enum values (excluding `0` / `_UNSPECIFIED`) become choices. |
-| `enum.defined_only` | `enum` | **`Choice`** | Standard protovalidate check; maps all defined enum values. |
-| `enum.in` | `enum` | **`Choice`** | Restricts choices to the specified subset whitelist. |
-| `enum.not_in` | `enum` | **`Choice`** | Excludes specified enum values from the choices. |
-| `string.in` | `string` | **`Choice`** | Discrete allowed strings become the choices. |
-| `int.in` / `float.in` | `int32`, `int64`, `float`, `double` | **`Score`** | Discrete numbers become the ordered rubric tiers. |
-| `int.gte/lte` | `int32`, `int64` | **`Score`** | Small ranges ($\le 10$) expand to exact sequence `[min..max]`; large ranges interpolate into 5 tiers. |
-| `float.gte/lte` | `float`, `double` | **`Score`** | Interpolates `min` to `max` into a 5-tier continuous rubric. |
+| Protobuf Feature | Jev Primitive | Behavior |
+| :--- | :--- | :--- |
+| `oneof` | **`Choice`** | Field names become the selectable choice options. |
+| `bool` | **`Noul`** | Binary yes/no classification with calibrated probability and optional `threshold`. |
+| `enum` | **`Choice`** | All defined enum values (excluding `0` / `_UNSPECIFIED`) become choices. |
+| `enum` + `choices` | **`Choice`** | Restricts choices to the specified whitelist of enum value names. |
+| `enum` + `not_in` | **`Choice`** | Excludes specified enum value names from the choices. |
+| `string` + `choices` | **`Choice`** | Discrete allowed strings become the choices. |
+| `string` + `criteria` | **`Choice`** | Criteria map keys become choices with accompanying descriptive guidance. |
+| Numeric + `scale` | **`Score`** | Discrete numbers become the ordered rubric tiers. |
+| Numeric + `min` / `max` | **`Score`** | Small integer ranges ($\le 10$) expand to exact sequence `[min..max]`; large or continuous ranges interpolate into 5 tiers. |
 
 ### Generated Client Usage
 

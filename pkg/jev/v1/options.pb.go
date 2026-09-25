@@ -29,16 +29,23 @@ type FieldOptions struct {
 	// Explicit instructions for Jev to evaluate this field.
 	// If omitted, the field's Protobuf doc comment is used.
 	Instructions string `protobuf:"bytes,1,opt,name=instructions,proto3" json:"instructions,omitempty"`
-	// If true, Jev will skip evaluating this field (e.g. for freeform text or downstream fields).
+	// If true, Jev will skip evaluating this field (e.g. for freeform text, IDs, or downstream fields).
 	Skip bool `protobuf:"varint,2,opt,name=skip,proto3" json:"skip,omitempty"`
 	// For boolean (Noul): confidence threshold [0.0 - 1.0] to evaluate as true.
 	Threshold float32 `protobuf:"fixed32,3,opt,name=threshold,proto3" json:"threshold,omitempty"`
-	// For numeric ranges (Score): minimum value (default: 0).
+	// For numeric ranges (Score): minimum value of the evaluation rubric scale (default: 0).
 	Min float32 `protobuf:"fixed32,4,opt,name=min,proto3" json:"min,omitempty"`
-	// For numeric ranges (Score): maximum value (default: 100).
+	// For numeric ranges (Score): maximum value of the evaluation rubric scale (default: 100).
 	Max float32 `protobuf:"fixed32,5,opt,name=max,proto3" json:"max,omitempty"`
-	// For enums (Choice): optional guidance/criteria for specific options.
-	Criteria      map[string]string `protobuf:"bytes,6,rep,name=criteria,proto3" json:"criteria,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// For enums, strings, and choices: guidance/criteria attached to specific options (label -> description).
+	// When specified on a string field without 'choices', the map keys define the allowed choices.
+	Criteria map[string]string `protobuf:"bytes,6,rep,name=criteria,proto3" json:"criteria,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// For string or enum fields (Choice): explicit whitelist of allowed choice values.
+	Choices []string `protobuf:"bytes,7,rep,name=choices,proto3" json:"choices,omitempty"`
+	// For enum fields (Choice): blacklist of enum value names to exclude from choices.
+	NotIn []string `protobuf:"bytes,8,rep,name=not_in,json=notIn,proto3" json:"not_in,omitempty"`
+	// For numeric fields (Score): explicit discrete scale points / rubric tiers (e.g. [1, 2, 3, 4, 5] or [0.2, 0.5, 0.8]).
+	Scale         []float32 `protobuf:"fixed32,9,rep,packed,name=scale,proto3" json:"scale,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -115,6 +122,27 @@ func (x *FieldOptions) GetCriteria() map[string]string {
 	return nil
 }
 
+func (x *FieldOptions) GetChoices() []string {
+	if x != nil {
+		return x.Choices
+	}
+	return nil
+}
+
+func (x *FieldOptions) GetNotIn() []string {
+	if x != nil {
+		return x.NotIn
+	}
+	return nil
+}
+
+func (x *FieldOptions) GetScale() []float32 {
+	if x != nil {
+		return x.Scale
+	}
+	return nil
+}
+
 var file_jev_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
@@ -136,14 +164,17 @@ var File_jev_v1_options_proto protoreflect.FileDescriptor
 
 const file_jev_v1_options_proto_rawDesc = "" +
 	"\n" +
-	"\x14jev/v1/options.proto\x12\x06jev.v1\x1a google/protobuf/descriptor.proto\"\x85\x02\n" +
+	"\x14jev/v1/options.proto\x12\x06jev.v1\x1a google/protobuf/descriptor.proto\"\xcc\x02\n" +
 	"\fFieldOptions\x12\"\n" +
 	"\finstructions\x18\x01 \x01(\tR\finstructions\x12\x12\n" +
 	"\x04skip\x18\x02 \x01(\bR\x04skip\x12\x1c\n" +
 	"\tthreshold\x18\x03 \x01(\x02R\tthreshold\x12\x10\n" +
 	"\x03min\x18\x04 \x01(\x02R\x03min\x12\x10\n" +
 	"\x03max\x18\x05 \x01(\x02R\x03max\x12>\n" +
-	"\bcriteria\x18\x06 \x03(\v2\".jev.v1.FieldOptions.CriteriaEntryR\bcriteria\x1a;\n" +
+	"\bcriteria\x18\x06 \x03(\v2\".jev.v1.FieldOptions.CriteriaEntryR\bcriteria\x12\x18\n" +
+	"\achoices\x18\a \x03(\tR\achoices\x12\x15\n" +
+	"\x06not_in\x18\b \x03(\tR\x05notIn\x12\x14\n" +
+	"\x05scale\x18\t \x03(\x02R\x05scale\x1a;\n" +
 	"\rCriteriaEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01:K\n" +

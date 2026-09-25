@@ -93,7 +93,7 @@ class ComprehensiveRecordJevClient:
                 instructions="Custom Jev instruction: assess customer cancellation intent",
             ),
             "accountTier": Choice(
-                instructions="Discrete string choices via protovalidate rule",
+                instructions="Discrete string choices via Jev options",
                 criteria={"TIER_ENTERPRISE": None, "TIER_PREMIUM": None, "TIER_STANDARD": None},
             ),
         }

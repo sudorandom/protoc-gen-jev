@@ -4,7 +4,7 @@
   "questions": {
     "accountTier": {
       "type": "Choice",
-      "instructions": "Discrete string choices via protovalidate rule",
+      "instructions": "Discrete string choices via Jev options",
       "criteria": {
         "TIER_ENTERPRISE": null,
         "TIER_PREMIUM": null,

@@ -4,7 +4,6 @@ package ai.comprehensive.v1;
 
 option go_package = "ai/comprehensive/v1;comprehensivev1";
 
-import "buf/validate/validate.proto";
 import "jev/v1/options.proto";
 
 // An enum demonstrating valid options.
@@ -17,68 +16,43 @@ enum Status {
 
 // A nested message for testing object properties.
 message Metadata {
-  string source = 1 [(buf.validate.field).string.min_len = 1];
-  int32 version = 2 [(buf.validate.field).int32.gt = 0];
+  string source = 1;
+  int32 version = 2;
 }
 
 // Comprehensive test message exercising every option and rule combination.
 message ComprehensiveRecord {
   // --- String validation variants ---
-  string text_bounded = 1 [
-    (buf.validate.field).string.min_len = 3,
-    (buf.validate.field).string.max_len = 50
-  ];
-
-  string email_address = 2 [
-    (buf.validate.field).string.email = true
-  ];
-
-  string website_url = 3 [
-    (buf.validate.field).string.uri = true
-  ];
-
-  string custom_pattern = 4 [
-    (buf.validate.field).string.pattern = "^ID-[0-9]{4}$"
-  ];
-
-  string prefixed_code = 5 [
-    (buf.validate.field).string.prefix = "CODE_"
-  ];
+  string text_bounded = 1;
+  string email_address = 2;
+  string website_url = 3;
+  string custom_pattern = 4;
+  string prefixed_code = 5;
 
   // --- Numeric validation variants ---
   int32 score_int = 6 [
-    (buf.validate.field).int32.gte = 1,
-    (buf.validate.field).int32.lte = 100
+    (jev.v1.field).min = 1,
+    (jev.v1.field).max = 100
   ];
 
-  int64 big_count = 7 [
-    (buf.validate.field).int64.gt = 0
-  ];
+  int64 big_count = 7;
 
   float ratio = 8 [
-    (buf.validate.field).float.finite = true,
-    (buf.validate.field).float.gte = 0.0,
-    (buf.validate.field).float.lte = 1.0
+    (jev.v1.field).min = 0.0,
+    (jev.v1.field).max = 1.0
   ];
 
   double latitude = 9 [
-    (buf.validate.field).double.gte = -90.0,
-    (buf.validate.field).double.lte = 90.0
+    (jev.v1.field).min = -90.0,
+    (jev.v1.field).max = 90.0
   ];
 
   // --- Boolean & Enum ---
   bool is_enabled = 10;
-
-  Status status = 11 [
-    (buf.validate.field).enum.defined_only = true
-  ];
+  Status status = 11;
 
   // --- Repeated / Arrays ---
-  repeated string tags = 12 [
-    (buf.validate.field).repeated.min_items = 1,
-    (buf.validate.field).repeated.max_items = 5,
-    (buf.validate.field).repeated.unique = true
-  ];
+  repeated string tags = 12;
 
   // --- Nested message ---
   Metadata metadata = 13;
@@ -104,10 +78,10 @@ message ComprehensiveRecord {
     (jev.v1.field).skip = true
   ];
 
-  // Discrete string choices via protovalidate rule
+  // Discrete string choices via Jev options
   string account_tier = 20 [
-    (buf.validate.field).string = {
-      in: ["TIER_STANDARD", "TIER_PREMIUM", "TIER_ENTERPRISE"]
-    }
+    (jev.v1.field).choices = "TIER_STANDARD",
+    (jev.v1.field).choices = "TIER_PREMIUM",
+    (jev.v1.field).choices = "TIER_ENTERPRISE"
   ];
 }

@@ -1,8 +1,8 @@
 # Example buf.gen.yaml demonstrating code generation with protoc-gen-jev.
 version: v2
 plugins:
-  - local: protoc-gen-jev
-    out: gen/jev
+  - local: ./protoc-gen-jev
+    out: examples/gen/jev
     opt:
       # Options: go, ts, python, json, or all (comma-separated)
       - targets=all

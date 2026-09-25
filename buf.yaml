@@ -3,5 +3,4 @@ modules:
   - path: proto
     name: buf.build/sudo-random/protoc-gen-jev
   - path: testdata/proto
-deps:
-  - buf.build/bufbuild/protovalidate
+  - path: examples/proto

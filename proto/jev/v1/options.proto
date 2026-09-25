@@ -16,18 +16,28 @@ message FieldOptions {
   // If omitted, the field's Protobuf doc comment is used.
   string instructions = 1;
 
-  // If true, Jev will skip evaluating this field (e.g. for freeform text or downstream fields).
+  // If true, Jev will skip evaluating this field (e.g. for freeform text, IDs, or downstream fields).
   bool skip = 2;
 
   // For boolean (Noul): confidence threshold [0.0 - 1.0] to evaluate as true.
   float threshold = 3;
 
-  // For numeric ranges (Score): minimum value (default: 0).
+  // For numeric ranges (Score): minimum value of the evaluation rubric scale (default: 0).
   float min = 4;
 
-  // For numeric ranges (Score): maximum value (default: 100).
+  // For numeric ranges (Score): maximum value of the evaluation rubric scale (default: 100).
   float max = 5;
 
-  // For enums (Choice): optional guidance/criteria for specific options.
+  // For enums, strings, and choices: guidance/criteria attached to specific options (label -> description).
+  // When specified on a string field without 'choices', the map keys define the allowed choices.
   map<string, string> criteria = 6;
+
+  // For string or enum fields (Choice): explicit whitelist of allowed choice values.
+  repeated string choices = 7;
+
+  // For enum fields (Choice): blacklist of enum value names to exclude from choices.
+  repeated string not_in = 8;
+
+  // For numeric fields (Score): explicit discrete scale points / rubric tiers (e.g. [1, 2, 3, 4, 5] or [0.2, 0.5, 0.8]).
+  repeated float scale = 9;
 }

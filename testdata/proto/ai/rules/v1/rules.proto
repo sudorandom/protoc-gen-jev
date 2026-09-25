@@ -4,7 +4,6 @@ package ai.rules.v1;
 
 option go_package = "ai/rules/v1;rulesv1";
 
-import "buf/validate/validate.proto";
 import "jev/v1/options.proto";
 
 enum Mode {
@@ -26,49 +25,62 @@ message RuleTestRecord {
   // 2. Proto3 optional (synthetic oneof) -> must NOT be treated as a oneof Choice!
   optional string optional_note = 4;
 
-  // 3. Enum restricted by enum.in -> Choice with only [MODE_FAST, MODE_BALANCED]
+  // 3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]
   Mode execution_mode = 5 [
-    (buf.validate.field).enum = { in: [1, 2] }
+    (jev.v1.field).choices = "MODE_FAST",
+    (jev.v1.field).choices = "MODE_BALANCED"
   ];
 
-  // 4. Enum restricted by enum.not_in -> Choice omitting MODE_DEBUG
+  // 4. Enum restricted by not_in -> Choice omitting MODE_DEBUG
   Mode filtered_mode = 6 [
-    (buf.validate.field).enum = { not_in: [4] }
+    (jev.v1.field).not_in = "MODE_DEBUG"
   ];
 
   // 5. Integer with small range (<= 10) -> exact sequence [1..5]
   int32 rating_small = 7 [
-    (buf.validate.field).int32 = { gte: 1, lte: 5 }
+    (jev.v1.field).min = 1,
+    (jev.v1.field).max = 5
   ];
 
-  // 6. Integer with strict bounds (gt/lt) -> [1, 2, 3]
+  // 6. Integer with explicit scale -> [1, 2, 3]
   int32 rating_strict = 8 [
-    (buf.validate.field).int32 = { gt: 0, lt: 4 }
+    (jev.v1.field).scale = 1,
+    (jev.v1.field).scale = 2,
+    (jev.v1.field).scale = 3
   ];
 
   // 7. Integer with discrete allowed values -> ["10", "20", "50", "100"]
   int32 discrete_code = 9 [
-    (buf.validate.field).int32 = { in: [10, 20, 50, 100] }
+    (jev.v1.field).scale = 10,
+    (jev.v1.field).scale = 20,
+    (jev.v1.field).scale = 50,
+    (jev.v1.field).scale = 100
   ];
 
   // 8. Large integer range -> 5-tier interpolated rubric [0, 250, 500, 750, 1000]
   int64 large_scale = 10 [
-    (buf.validate.field).int64 = { gte: 0, lte: 1000 }
+    (jev.v1.field).min = 0,
+    (jev.v1.field).max = 1000
   ];
 
   // 9. Float continuous range -> 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]
   float temperature = 11 [
-    (buf.validate.field).float = { gte: -40.0, lte: 60.0 }
+    (jev.v1.field).min = -40.0,
+    (jev.v1.field).max = 60.0
   ];
 
   // 10. Float discrete values -> ["0.2", "0.5", "0.8"]
   float discrete_ratio = 12 [
-    (buf.validate.field).float = { in: [0.2, 0.5, 0.8] }
+    (jev.v1.field).scale = 0.2,
+    (jev.v1.field).scale = 0.5,
+    (jev.v1.field).scale = 0.8
   ];
 
   // 11. String with allowed set of values -> Choice
   string security_clearance = 13 [
-    (buf.validate.field).string = { in: ["PUBLIC", "SECRET", "TOP_SECRET"] }
+    (jev.v1.field).choices = "PUBLIC",
+    (jev.v1.field).choices = "SECRET",
+    (jev.v1.field).choices = "TOP_SECRET"
   ];
 
   // 12. String with custom Jev criteria options -> Choice

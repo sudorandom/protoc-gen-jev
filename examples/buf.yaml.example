@@ -1,0 +1,5 @@
+# Example buf.yaml for using protoc-gen-jev in an external project.
+# Copy to your project's buf.yaml and run `buf dep update`.
+version: v2
+deps:
+  - buf.build/sudo-random/protoc-gen-jev

@@ -19,7 +19,7 @@ generate: build
 	@echo "Running buf generate for testdata..."
 	buf generate
 	@echo "Running buf generate for examples..."
-	(cd examples && PATH="{{ justfile_directory() }}:$PATH" buf generate)
+	buf generate --template examples/buf.gen.yaml examples/proto
 	@echo "✔ Code generation complete."
 
 # ------------------------------------------------------------------------------

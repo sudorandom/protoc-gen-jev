@@ -66,7 +66,7 @@
     },
     "executionMode": {
       "type": "Choice",
-      "instructions": "3. Enum restricted by enum.in -\u003e Choice with only [MODE_FAST, MODE_BALANCED]",
+      "instructions": "3. Enum restricted by choices -\u003e Choice with only [MODE_FAST, MODE_BALANCED]",
       "criteria": {
         "MODE_BALANCED": null,
         "MODE_FAST": null
@@ -77,7 +77,7 @@
     },
     "filteredMode": {
       "type": "Choice",
-      "instructions": "4. Enum restricted by enum.not_in -\u003e Choice omitting MODE_DEBUG",
+      "instructions": "4. Enum restricted by not_in -\u003e Choice omitting MODE_DEBUG",
       "criteria": {
         "MODE_ACCURATE": null,
         "MODE_BALANCED": null,
@@ -117,7 +117,7 @@
     },
     "ratingStrict": {
       "type": "Score",
-      "instructions": "6. Integer with strict bounds (gt/lt) -\u003e [1, 2, 3]",
+      "instructions": "6. Integer with explicit scale -\u003e [1, 2, 3]",
       "criteria": [
         "1",
         "2",

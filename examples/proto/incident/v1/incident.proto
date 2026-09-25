@@ -4,7 +4,6 @@ package incident.v1;
 
 option go_package = "incident/v1;incidentv1";
 
-import "buf/validate/validate.proto";
 import "jev/v1/options.proto";
 
 enum PriorityLevel {
@@ -31,10 +30,8 @@ message IncidentTriage {
     (jev.v1.field).threshold = 0.85
   ];
 
-  // 3. Enum field -> Jev Choice question
-  // Uses protovalidate's defined_only rule (all non-unspecified values are choices).
+  // 3. Enum field with criteria guidance -> Jev Choice question
   PriorityLevel priority = 5 [
-    (buf.validate.field).enum.defined_only = true,
     (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
     (jev.v1.field).criteria = {
       key: "PRIORITY_LEVEL_CRITICAL",
@@ -56,7 +53,8 @@ message IncidentTriage {
 
   // 4. Bounded integer range (<= 10) -> Jev Score with exact sequence rubric [1, 2, 3, 4, 5]
   int32 urgency_rating = 6 [
-    (buf.validate.field).int32 = { gte: 1, lte: 5 },
+    (jev.v1.field).min = 1,
+    (jev.v1.field).max = 5,
     (jev.v1.field).instructions = "How urgently does this issue need to be resolved?"
   ];
 
@@ -67,9 +65,12 @@ message IncidentTriage {
     (jev.v1.field).max = 100.0
   ];
 
-  // 6. String with discrete allowed values -> Jev Choice question
+  // 6. String with discrete allowed choices -> Jev Choice question
   string compliance_classification = 8 [
-    (buf.validate.field).string = { in: ["PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII", "PCI_DSS"] },
+    (jev.v1.field).choices = "PUBLIC",
+    (jev.v1.field).choices = "INTERNAL_CONFIDENTIAL",
+    (jev.v1.field).choices = "RESTRICTED_PII",
+    (jev.v1.field).choices = "PCI_DSS",
     (jev.v1.field).instructions = "Categorize any sensitive or regulated data exposed in the incident report"
   ];
 

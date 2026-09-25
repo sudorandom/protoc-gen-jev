@@ -30,11 +30,11 @@ export class RuleTestRecordJevClient {
         { "email": null, "push_notification": null, "sms": null },
       ),
       executionMode: choice(
-        "3. Enum restricted by enum.in -> Choice with only [MODE_FAST, MODE_BALANCED]",
+        "3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]",
         { "MODE_BALANCED": null, "MODE_FAST": null },
       ),
       filteredMode: choice(
-        "4. Enum restricted by enum.not_in -> Choice omitting MODE_DEBUG",
+        "4. Enum restricted by not_in -> Choice omitting MODE_DEBUG",
         { "MODE_ACCURATE": null, "MODE_BALANCED": null, "MODE_FAST": null },
       ),
       ratingSmall: score(
@@ -42,7 +42,7 @@ export class RuleTestRecordJevClient {
         ["1", "2", "3", "4", "5"],
       ),
       ratingStrict: score(
-        "6. Integer with strict bounds (gt/lt) -> [1, 2, 3]",
+        "6. Integer with explicit scale -> [1, 2, 3]",
         ["1", "2", "3"],
       ),
       discreteCode: score(

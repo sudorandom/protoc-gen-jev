@@ -178,7 +178,7 @@ func (c *ComprehensiveRecordJevClient) BuildQuestions() map[string]any {
 		},
 		"accountTier": map[string]any{
 			"type":         "choice",
-			"instructions": "Discrete string choices via protovalidate rule",
+			"instructions": "Discrete string choices via Jev options",
 			"criteria":     map[string]any{"TIER_ENTERPRISE": nil, "TIER_PREMIUM": nil, "TIER_STANDARD": nil},
 		},
 	}

@@ -57,12 +57,12 @@ func (c *RuleTestRecordJevClient) BuildQuestions() map[string]any {
 		},
 		"executionMode": map[string]any{
 			"type":         "choice",
-			"instructions": "3. Enum restricted by enum.in -> Choice with only [MODE_FAST, MODE_BALANCED]",
+			"instructions": "3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]",
 			"criteria":     map[string]any{"MODE_BALANCED": nil, "MODE_FAST": nil},
 		},
 		"filteredMode": map[string]any{
 			"type":         "choice",
-			"instructions": "4. Enum restricted by enum.not_in -> Choice omitting MODE_DEBUG",
+			"instructions": "4. Enum restricted by not_in -> Choice omitting MODE_DEBUG",
 			"criteria":     map[string]any{"MODE_ACCURATE": nil, "MODE_BALANCED": nil, "MODE_FAST": nil},
 		},
 		"ratingSmall": map[string]any{
@@ -72,7 +72,7 @@ func (c *RuleTestRecordJevClient) BuildQuestions() map[string]any {
 		},
 		"ratingStrict": map[string]any{
 			"type":         "score",
-			"instructions": "6. Integer with strict bounds (gt/lt) -> [1, 2, 3]",
+			"instructions": "6. Integer with explicit scale -> [1, 2, 3]",
 			"criteria":     []string{"1", "2", "3"},
 		},
 		"discreteCode": map[string]any{
