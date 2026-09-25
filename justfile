@@ -45,9 +45,14 @@ run-examples: generate
 	go run examples/go/main.go
 	@echo ""
 	@echo "=== Running Python Example ==="
+	python -c "import typesafe_sdk" 2>/dev/null || pip install -q typesafe-sdk
 	python examples/python/main.py
 	@echo ""
 	@echo "=== Running TypeScript Example ==="
+	@if [ ! -d "examples/typescript/node_modules" ]; then \
+		echo "Installing TypeScript example dependencies..."; \
+		npm --prefix examples/typescript install --no-audit; \
+	fi
 	NODE_PATH="{{ justfile_directory() }}/examples/typescript/node_modules" npx --prefix examples/typescript tsx examples/typescript/index.ts
 	@echo ""
 	@echo "✔ All language examples completed successfully!"
@@ -78,6 +83,12 @@ lint:
 	buf lint
 	@echo "Running go vet..."
 	go vet ./internal/... ./cmd/... .
+	@echo "Running golangci-lint..."
+	golangci-lint run ./...
+
+# Run goreleaser to create a release or check configuration
+release *args="release --clean":
+	goreleaser {{ args }}
 
 # Format all Go code
 format:

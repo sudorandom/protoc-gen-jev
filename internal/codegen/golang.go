@@ -181,7 +181,7 @@ func GenerateGo(gen *protogen.Plugin, file *protogen.File, specs []model.Message
 		g.P("	return decisions, nil")
 		g.P("}")
 		g.P()
-		g.P(fmt.Sprintf("// BatchEvaluate evaluates multiple states against Jev sequentially."))
+		g.P("// BatchEvaluate evaluates multiple states against Jev sequentially.")
 		g.P(fmt.Sprintf("func (c *%s) BatchEvaluate(ctx context.Context, states []any) ([]*%s, error) {", clientName, decisionsName))
 		g.P(fmt.Sprintf("	results := make([]*%s, len(states))", decisionsName))
 		g.P("	for i, s := range states {")

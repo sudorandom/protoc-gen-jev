@@ -218,8 +218,8 @@ func resolveStringCriteria(desc protoreflect.FieldDescriptor, rule *validate.Fie
 	criteria := make(map[string]any)
 
 	// 1. protovalidate string.in
-	if rule != nil && rule.GetString_() != nil {
-		sr := rule.GetString_()
+	if rule != nil && rule.GetString() != nil {
+		sr := rule.GetString()
 		for _, val := range sr.In {
 			criteria[val] = nil
 		}
@@ -262,9 +262,7 @@ func resolveIntCriteria(desc protoreflect.FieldDescriptor, rule *validate.FieldR
 				maxVal = int64(r.GetLt()) - 1
 			}
 		} else if r := rule.GetInt64(); r != nil {
-			for _, v := range r.In {
-				inValues = append(inValues, v)
-			}
+			inValues = append(inValues, r.In...)
 			if r.HasGte() {
 				hasMin = true
 				minVal = r.GetGte()
@@ -349,9 +347,7 @@ func resolveFloatCriteria(desc protoreflect.FieldDescriptor, rule *validate.Fiel
 				maxVal = float64(r.GetLt())
 			}
 		} else if r := rule.GetDouble(); r != nil {
-			for _, v := range r.In {
-				inValues = append(inValues, v)
-			}
+			inValues = append(inValues, r.In...)
 			if r.HasGte() {
 				hasMin = true
 				minVal = r.GetGte()
