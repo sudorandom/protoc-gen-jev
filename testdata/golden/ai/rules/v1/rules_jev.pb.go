@@ -7,33 +7,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+)
+
+var (
+	_ = math.Inf
+	_ = proto.Marshal
 )
 
 const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
+const DefaultJevModel = "jev-latest"
 
-// RuleTestRecordJevDecisions holds structured decisions returned by Jev for RuleTestRecord.
-type RuleTestRecordJevDecisions struct {
-	DeliveryMethod     string  `json:"delivery_method"`
-	ExecutionMode      string  `json:"executionMode"`
-	FilteredMode       string  `json:"filteredMode"`
-	RatingSmall        float64 `json:"ratingSmall"`
-	RatingStrict       float64 `json:"ratingStrict"`
-	DiscreteCode       float64 `json:"discreteCode"`
-	LargeScale         float64 `json:"largeScale"`
-	Temperature        float64 `json:"temperature"`
-	DiscreteRatio      float64 `json:"discreteRatio"`
-	SecurityClearance  string  `json:"securityClearance"`
-	DecisionFlag       string  `json:"decisionFlag"`
-	CustomBoundedScore float64 `json:"customBoundedScore"`
+func interpolateScore(s float64, levels []float64) float64 {
+	if len(levels) == 0 {
+		return s
+	}
+	if s <= 0 {
+		return levels[0]
+	}
+	n := len(levels)
+	if s >= float64(n-1) {
+		return levels[n-1]
+	}
+	idx := int(s)
+	frac := s - float64(idx)
+	return levels[idx] + frac*(levels[idx+1]-levels[idx])
 }
 
 // RuleTestRecordJevClient is a typed client for evaluating RuleTestRecord decisions via Jev.
 type RuleTestRecordJevClient struct {
 	APIKey     string
 	Endpoint   string
+	Model      string
 	HTTPClient *http.Client
 }
 
@@ -44,7 +55,8 @@ func NewRuleTestRecordJevClient(apiKey string) *RuleTestRecordJevClient {
 	return &RuleTestRecordJevClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Model:      DefaultJevModel,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -53,17 +65,17 @@ func (c *RuleTestRecordJevClient) BuildQuestions() map[string]any {
 		"delivery_method": map[string]any{
 			"type":         "choice",
 			"instructions": "1. Oneof mutual exclusion -> maps to Choice",
-			"criteria":     map[string]any{"email": nil, "push_notification": nil, "sms": nil},
+			"criteria":     map[string]any{"email": "email", "push_notification": "push_notification", "sms": "sms"},
 		},
 		"executionMode": map[string]any{
 			"type":         "choice",
 			"instructions": "3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]",
-			"criteria":     map[string]any{"MODE_BALANCED": nil, "MODE_FAST": nil},
+			"criteria":     map[string]any{"MODE_BALANCED": "", "MODE_FAST": ""},
 		},
 		"filteredMode": map[string]any{
 			"type":         "choice",
 			"instructions": "4. Enum restricted by not_in -> Choice omitting MODE_DEBUG",
-			"criteria":     map[string]any{"MODE_ACCURATE": nil, "MODE_BALANCED": nil, "MODE_FAST": nil},
+			"criteria":     map[string]any{"MODE_ACCURATE": "", "MODE_BALANCED": "", "MODE_FAST": ""},
 		},
 		"ratingSmall": map[string]any{
 			"type":         "score",
@@ -98,12 +110,12 @@ func (c *RuleTestRecordJevClient) BuildQuestions() map[string]any {
 		"securityClearance": map[string]any{
 			"type":         "choice",
 			"instructions": "11. String with allowed set of values -> Choice",
-			"criteria":     map[string]any{"PUBLIC": nil, "SECRET": nil, "TOP_SECRET": nil},
+			"criteria":     map[string]any{"PUBLIC": "", "SECRET": "", "TOP_SECRET": ""},
 		},
 		"decisionFlag": map[string]any{
 			"type":         "choice",
 			"instructions": "12. String with custom Jev criteria options -> Choice",
-			"criteria":     map[string]any{"APPROVE": nil, "REJECT": nil},
+			"criteria":     map[string]any{"APPROVE": "Request approved", "REJECT": "Request rejected"},
 		},
 		"customBoundedScore": map[string]any{
 			"type":         "score",
@@ -113,9 +125,22 @@ func (c *RuleTestRecordJevClient) BuildQuestions() map[string]any {
 	}
 }
 
-func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, state any) (*RuleTestRecordJevDecisions, error) {
+func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, state any) (*RuleTestRecord, error) {
+	var stateJSON any
+	if pm, ok := state.(proto.Message); ok {
+		b, err := protojson.Marshal(pm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
+		}
+		if err := json.Unmarshal(b, &stateJSON); err != nil {
+			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
+		}
+	} else {
+		stateJSON = state
+	}
 	payload := map[string]any{
-		"state":     state,
+		"state":     stateJSON,
+		"model":     c.Model,
 		"questions": c.BuildQuestions(),
 	}
 	bodyBytes, err := json.Marshal(payload)
@@ -147,7 +172,8 @@ func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, state any) (*Rul
 			Choice string `json:"choice"`
 		} `json:"choices"`
 		Nouls map[string]struct {
-			Result bool `json:"result"`
+			Result bool    `json:"result"`
+			Noul   float64 `json:"noul"`
 		} `json:"nouls"`
 		Scores map[string]struct {
 			Score float64 `json:"score"`
@@ -156,73 +182,160 @@ func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, state any) (*Rul
 	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
-	decisions := &RuleTestRecordJevDecisions{}
+	decisions := &RuleTestRecord{}
+	var choice_delivery_method string
 	if item, ok := rawResp.Answers["delivery_method"]; ok && item.Choice != "" {
-		decisions.DeliveryMethod = item.Choice
+		choice_delivery_method = item.Choice
 	} else if item, ok := rawResp.Choices["delivery_method"]; ok {
-		decisions.DeliveryMethod = item.Choice
+		choice_delivery_method = item.Choice
 	}
+	if choice_delivery_method != "" {
+		switch choice_delivery_method {
+		case "email":
+			decisions.DeliveryMethod = &RuleTestRecord_Email{Email: choice_delivery_method}
+		case "push_notification":
+			decisions.DeliveryMethod = &RuleTestRecord_PushNotification{PushNotification: choice_delivery_method}
+		case "sms":
+			decisions.DeliveryMethod = &RuleTestRecord_Sms{Sms: choice_delivery_method}
+		}
+	}
+	var choice_executionMode string
 	if item, ok := rawResp.Answers["executionMode"]; ok && item.Choice != "" {
-		decisions.ExecutionMode = item.Choice
+		choice_executionMode = item.Choice
 	} else if item, ok := rawResp.Choices["executionMode"]; ok {
-		decisions.ExecutionMode = item.Choice
+		choice_executionMode = item.Choice
 	}
+	if choice_executionMode != "" {
+		if val, ok := Mode_value[choice_executionMode]; ok {
+			decisions.ExecutionMode = Mode(val)
+		}
+	}
+	var choice_filteredMode string
 	if item, ok := rawResp.Answers["filteredMode"]; ok && item.Choice != "" {
-		decisions.FilteredMode = item.Choice
+		choice_filteredMode = item.Choice
 	} else if item, ok := rawResp.Choices["filteredMode"]; ok {
-		decisions.FilteredMode = item.Choice
+		choice_filteredMode = item.Choice
 	}
-	if item, ok := rawResp.Answers["ratingSmall"]; ok && item.Score != 0 {
-		decisions.RatingSmall = item.Score
+	if choice_filteredMode != "" {
+		if val, ok := Mode_value[choice_filteredMode]; ok {
+			decisions.FilteredMode = Mode(val)
+		}
+	}
+	var scorePos_ratingSmall float64
+	var hasScore_ratingSmall bool
+	if item, ok := rawResp.Answers["ratingSmall"]; ok {
+		scorePos_ratingSmall = item.Score
+		hasScore_ratingSmall = true
 	} else if item, ok := rawResp.Scores["ratingSmall"]; ok {
-		decisions.RatingSmall = item.Score
+		scorePos_ratingSmall = item.Score
+		hasScore_ratingSmall = true
 	}
-	if item, ok := rawResp.Answers["ratingStrict"]; ok && item.Score != 0 {
-		decisions.RatingStrict = item.Score
+	if hasScore_ratingSmall {
+		sVal := interpolateScore(scorePos_ratingSmall, []float64{1, 2, 3, 4, 5})
+		decisions.RatingSmall = int32(math.Round(sVal))
+	}
+	var scorePos_ratingStrict float64
+	var hasScore_ratingStrict bool
+	if item, ok := rawResp.Answers["ratingStrict"]; ok {
+		scorePos_ratingStrict = item.Score
+		hasScore_ratingStrict = true
 	} else if item, ok := rawResp.Scores["ratingStrict"]; ok {
-		decisions.RatingStrict = item.Score
+		scorePos_ratingStrict = item.Score
+		hasScore_ratingStrict = true
 	}
-	if item, ok := rawResp.Answers["discreteCode"]; ok && item.Score != 0 {
-		decisions.DiscreteCode = item.Score
+	if hasScore_ratingStrict {
+		sVal := interpolateScore(scorePos_ratingStrict, []float64{1, 2, 3})
+		decisions.RatingStrict = int32(math.Round(sVal))
+	}
+	var scorePos_discreteCode float64
+	var hasScore_discreteCode bool
+	if item, ok := rawResp.Answers["discreteCode"]; ok {
+		scorePos_discreteCode = item.Score
+		hasScore_discreteCode = true
 	} else if item, ok := rawResp.Scores["discreteCode"]; ok {
-		decisions.DiscreteCode = item.Score
+		scorePos_discreteCode = item.Score
+		hasScore_discreteCode = true
 	}
-	if item, ok := rawResp.Answers["largeScale"]; ok && item.Score != 0 {
-		decisions.LargeScale = item.Score
+	if hasScore_discreteCode {
+		sVal := interpolateScore(scorePos_discreteCode, []float64{10, 20, 50, 100})
+		decisions.DiscreteCode = int32(math.Round(sVal))
+	}
+	var scorePos_largeScale float64
+	var hasScore_largeScale bool
+	if item, ok := rawResp.Answers["largeScale"]; ok {
+		scorePos_largeScale = item.Score
+		hasScore_largeScale = true
 	} else if item, ok := rawResp.Scores["largeScale"]; ok {
-		decisions.LargeScale = item.Score
+		scorePos_largeScale = item.Score
+		hasScore_largeScale = true
 	}
-	if item, ok := rawResp.Answers["temperature"]; ok && item.Score != 0 {
-		decisions.Temperature = item.Score
+	if hasScore_largeScale {
+		sVal := interpolateScore(scorePos_largeScale, []float64{0, 250, 500, 750, 1000})
+		decisions.LargeScale = int64(math.Round(sVal))
+	}
+	var scorePos_temperature float64
+	var hasScore_temperature bool
+	if item, ok := rawResp.Answers["temperature"]; ok {
+		scorePos_temperature = item.Score
+		hasScore_temperature = true
 	} else if item, ok := rawResp.Scores["temperature"]; ok {
-		decisions.Temperature = item.Score
+		scorePos_temperature = item.Score
+		hasScore_temperature = true
 	}
-	if item, ok := rawResp.Answers["discreteRatio"]; ok && item.Score != 0 {
-		decisions.DiscreteRatio = item.Score
+	if hasScore_temperature {
+		sVal := interpolateScore(scorePos_temperature, []float64{-40, -15, 10, 35, 60})
+		decisions.Temperature = float32(sVal)
+	}
+	var scorePos_discreteRatio float64
+	var hasScore_discreteRatio bool
+	if item, ok := rawResp.Answers["discreteRatio"]; ok {
+		scorePos_discreteRatio = item.Score
+		hasScore_discreteRatio = true
 	} else if item, ok := rawResp.Scores["discreteRatio"]; ok {
-		decisions.DiscreteRatio = item.Score
+		scorePos_discreteRatio = item.Score
+		hasScore_discreteRatio = true
 	}
+	if hasScore_discreteRatio {
+		sVal := interpolateScore(scorePos_discreteRatio, []float64{0.2, 0.5, 0.8})
+		decisions.DiscreteRatio = float32(sVal)
+	}
+	var choice_securityClearance string
 	if item, ok := rawResp.Answers["securityClearance"]; ok && item.Choice != "" {
-		decisions.SecurityClearance = item.Choice
+		choice_securityClearance = item.Choice
 	} else if item, ok := rawResp.Choices["securityClearance"]; ok {
-		decisions.SecurityClearance = item.Choice
+		choice_securityClearance = item.Choice
 	}
+	if choice_securityClearance != "" {
+		decisions.SecurityClearance = choice_securityClearance
+	}
+	var choice_decisionFlag string
 	if item, ok := rawResp.Answers["decisionFlag"]; ok && item.Choice != "" {
-		decisions.DecisionFlag = item.Choice
+		choice_decisionFlag = item.Choice
 	} else if item, ok := rawResp.Choices["decisionFlag"]; ok {
-		decisions.DecisionFlag = item.Choice
+		choice_decisionFlag = item.Choice
 	}
-	if item, ok := rawResp.Answers["customBoundedScore"]; ok && item.Score != 0 {
-		decisions.CustomBoundedScore = item.Score
+	if choice_decisionFlag != "" {
+		decisions.DecisionFlag = choice_decisionFlag
+	}
+	var scorePos_customBoundedScore float64
+	var hasScore_customBoundedScore bool
+	if item, ok := rawResp.Answers["customBoundedScore"]; ok {
+		scorePos_customBoundedScore = item.Score
+		hasScore_customBoundedScore = true
 	} else if item, ok := rawResp.Scores["customBoundedScore"]; ok {
-		decisions.CustomBoundedScore = item.Score
+		scorePos_customBoundedScore = item.Score
+		hasScore_customBoundedScore = true
+	}
+	if hasScore_customBoundedScore {
+		sVal := interpolateScore(scorePos_customBoundedScore, []float64{10, 20, 30, 40, 50})
+		decisions.CustomBoundedScore = float32(sVal)
 	}
 	return decisions, nil
 }
 
 // BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *RuleTestRecordJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*RuleTestRecordJevDecisions, error) {
-	results := make([]*RuleTestRecordJevDecisions, len(states))
+func (c *RuleTestRecordJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*RuleTestRecord, error) {
+	results := make([]*RuleTestRecord, len(states))
 	for i, s := range states {
 		res, err := c.Evaluate(ctx, s)
 		if err != nil {

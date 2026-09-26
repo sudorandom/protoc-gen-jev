@@ -32,8 +32,11 @@ message ComprehensiveRecord {
   // --- Numeric validation variants ---
   int32 score_int = 6 [
     (jev.v1.field).score = {
-      min: 1,
-      max: 100
+      levels: [
+        { value: 1, description: "Minimum score" },
+        { value: 50, description: "Average score" },
+        { value: 100, description: "Maximum score" }
+      ]
     }
   ];
 
@@ -41,15 +44,21 @@ message ComprehensiveRecord {
 
   float ratio = 8 [
     (jev.v1.field).score = {
-      min: 0.0,
-      max: 1.0
+      levels: [
+        { value: 0.0, description: "Zero ratio" },
+        { value: 0.5, description: "Half ratio" },
+        { value: 1.0, description: "Full ratio" }
+      ]
     }
   ];
 
   double latitude = 9 [
     (jev.v1.field).score = {
-      min: -90.0,
-      max: 90.0
+      levels: [
+        { value: -90.0, description: "South Pole" },
+        { value: 0.0, description: "Equator" },
+        { value: 90.0, description: "North Pole" }
+      ]
     }
   ];
 

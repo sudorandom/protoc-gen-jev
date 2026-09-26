@@ -42,45 +42,73 @@ message RuleTestRecord {
   // 5. Integer with small range (<= 10) -> exact sequence [1..5]
   int32 rating_small = 7 [
     (jev.v1.field).score = {
-      min: 1,
-      max: 5
+      levels: [
+        { value: 1, description: "1" },
+        { value: 2, description: "2" },
+        { value: 3, description: "3" },
+        { value: 4, description: "4" },
+        { value: 5, description: "5" }
+      ]
     }
   ];
 
   // 6. Integer with explicit scale -> [1, 2, 3]
   int32 rating_strict = 8 [
     (jev.v1.field).score = {
-      scale: [1, 2, 3]
+      levels: [
+        { value: 1, description: "1" },
+        { value: 2, description: "2" },
+        { value: 3, description: "3" }
+      ]
     }
   ];
 
   // 7. Integer with discrete allowed values -> ["10", "20", "50", "100"]
   int32 discrete_code = 9 [
     (jev.v1.field).score = {
-      scale: [10, 20, 50, 100]
+      levels: [
+        { value: 10, description: "10" },
+        { value: 20, description: "20" },
+        { value: 50, description: "50" },
+        { value: 100, description: "100" }
+      ]
     }
   ];
 
   // 8. Large integer range -> 5-tier interpolated rubric [0, 250, 500, 750, 1000]
   int64 large_scale = 10 [
     (jev.v1.field).score = {
-      min: 0,
-      max: 1000
+      levels: [
+        { value: 0, description: "0" },
+        { value: 250, description: "250" },
+        { value: 500, description: "500" },
+        { value: 750, description: "750" },
+        { value: 1000, description: "1000" }
+      ]
     }
   ];
 
   // 9. Float continuous range -> 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]
   float temperature = 11 [
     (jev.v1.field).score = {
-      min: -40.0,
-      max: 60.0
+      levels: [
+        { value: -40.0, description: "-40.0" },
+        { value: -15.0, description: "-15.0" },
+        { value: 10.0, description: "10.0" },
+        { value: 35.0, description: "35.0" },
+        { value: 60.0, description: "60.0" }
+      ]
     }
   ];
 
   // 10. Float discrete values -> ["0.2", "0.5", "0.8"]
   float discrete_ratio = 12 [
     (jev.v1.field).score = {
-      scale: [0.2, 0.5, 0.8]
+      levels: [
+        { value: 0.2, description: "0.2" },
+        { value: 0.5, description: "0.5" },
+        { value: 0.8, description: "0.8" }
+      ]
     }
   ];
 
@@ -108,8 +136,13 @@ message RuleTestRecord {
   // 13. Float with custom Jev min/max options -> [10.0, 20.0, 30.0, 40.0, 50.0]
   float custom_bounded_score = 15 [
     (jev.v1.field).score = {
-      min: 10,
-      max: 50
+      levels: [
+        { value: 10, description: "10.0" },
+        { value: 20, description: "20.0" },
+        { value: 30, description: "30.0" },
+        { value: 40, description: "40.0" },
+        { value: 50, description: "50.0" }
+      ]
     }
   ];
 

@@ -11,20 +11,37 @@ const (
 	TypeScore  QuestionType = "Score"
 )
 
+// ScoreLevel represents a single rubric tier for Score questions.
+type ScoreLevel struct {
+	Value       float64 `json:"value"`
+	Description string  `json:"description"`
+}
+
 // Question represents a single Jev decision question mapped from a Protobuf field.
 type Question struct {
-	Type         QuestionType `json:"type"`
-	Instructions string       `json:"instructions"`
-	Criteria     any          `json:"criteria,omitempty"`
-	ProtoField   string       `json:"proto_field"`
-	JSONField    string       `json:"json_field"`
-	GoField      string       `json:"go_field"`
+	Type           QuestionType      `json:"type"`
+	Instructions   string            `json:"instructions"`
+	Criteria       any               `json:"criteria,omitempty"`
+	Threshold      float64           `json:"threshold,omitempty"`
+	ScoreLevels    []ScoreLevel      `json:"score_levels,omitempty"`
+	ProtoField     string            `json:"proto_field"`
+	JSONField      string            `json:"json_field"`
+	GoField        string            `json:"go_field"`
+	PyField        string            `json:"py_field"`
+	FieldType      string            `json:"field_type"` // "string", "bool", "int32", "int64", "float32", "float64", "enum", "oneof"
+	IsEnum         bool              `json:"is_enum,omitempty"`
+	EnumTypeName   string            `json:"enum_type_name,omitempty"`
+	IsOneof        bool              `json:"is_oneof,omitempty"`
+	OneofName      string            `json:"oneof_name,omitempty"`
+	OneofCases     map[string]string `json:"oneof_cases,omitempty"`      // proto_field -> Go struct suffix / TS case
+	OneofCaseKinds map[string]string `json:"oneof_case_kinds,omitempty"` // proto_field -> proto kind (e.g. "bytes", "string")
 }
 
 // MessageSpec represents all Jev questions extracted from a single Protobuf message.
 type MessageSpec struct {
 	MessageName string              `json:"message_name"`
 	Package     string              `json:"package"`
+	FileBase    string              `json:"file_base,omitempty"`
 	Questions   map[string]Question `json:"questions"`
 	Order       []string            `json:"order,omitempty"`
 }
@@ -50,6 +67,7 @@ type MethodSpec struct {
 type ServiceSpec struct {
 	ServiceName string       `json:"service_name"`
 	Package     string       `json:"package"`
+	FileBase    string       `json:"file_base,omitempty"`
 	Methods     []MethodSpec `json:"methods"`
 }
 

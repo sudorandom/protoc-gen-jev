@@ -1,1 +1,2 @@
 typesafe-sdk
+protobuf>=5.0.0

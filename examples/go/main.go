@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	incidentv1 "github.com/sudorandom/protoc-gen-jev/examples/gen/jev/incident/v1"
 )
 
@@ -47,8 +49,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	decJSON, _ := json.MarshalIndent(decision, "", "  ")
-	fmt.Printf("✔ Decision received:\n%s\n", string(decJSON))
+	decBytes, _ := protojson.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(decision)
+	fmt.Printf("✔ Decision received:\n%s\n", string(decBytes))
 
 	// 3. Batch evaluation
 	fmt.Println("\n3. Batch Evaluating 3 Incident States...")
@@ -81,8 +83,17 @@ func main() {
 
 	fmt.Printf("✔ Successfully evaluated %d batch items.\n", len(batchDecisions))
 	for i, d := range batchDecisions {
-		fmt.Printf("  - Item [%d]: RoutingTarget=%s, Paging=%t, Priority=%s, Urgency=%.0f, BlastRadius=%.1f%%\n",
-			i+1, d.RoutingTarget, d.RequiresImmediatePaging, d.Priority, d.UrgencyRating, d.BlastRadiusPercentage)
+		var target string
+		switch x := d.GetRoutingTarget().(type) {
+		case *incidentv1.TriageResponse_AutomatedRunbook:
+			target = "automated_runbook:" + x.AutomatedRunbook
+		case *incidentv1.TriageResponse_OncallEngineer:
+			target = "oncall_engineer:" + x.OncallEngineer
+		case *incidentv1.TriageResponse_IncidentCommander:
+			target = "incident_commander:" + x.IncidentCommander
+		}
+		fmt.Printf("  - Item [%d]: RoutingTarget=%s, Paging=%t, Priority=%s, Urgency=%d, BlastRadius=%.1f%%\n",
+			i+1, target, d.RequiresImmediatePaging, d.Priority.String(), d.UrgencyRating, d.BlastRadiusPercentage)
 	}
 
 	fmt.Println("\n✔ Go End-to-End Test PASSED successfully!")

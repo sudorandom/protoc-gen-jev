@@ -7,22 +7,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+)
+
+var (
+	_ = math.Inf
+	_ = proto.Marshal
 )
 
 const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
+const DefaultJevModel = "jev-latest"
 
-// EntityJevDecisions holds structured decisions returned by Jev for Entity.
-type EntityJevDecisions struct {
-	Relevance float64 `json:"relevance"`
+func interpolateScore(s float64, levels []float64) float64 {
+	if len(levels) == 0 {
+		return s
+	}
+	if s <= 0 {
+		return levels[0]
+	}
+	n := len(levels)
+	if s >= float64(n-1) {
+		return levels[n-1]
+	}
+	idx := int(s)
+	frac := s - float64(idx)
+	return levels[idx] + frac*(levels[idx+1]-levels[idx])
 }
 
 // EntityJevClient is a typed client for evaluating Entity decisions via Jev.
 type EntityJevClient struct {
 	APIKey     string
 	Endpoint   string
+	Model      string
 	HTTPClient *http.Client
 }
 
@@ -33,7 +55,8 @@ func NewEntityJevClient(apiKey string) *EntityJevClient {
 	return &EntityJevClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Model:      DefaultJevModel,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -42,14 +65,27 @@ func (c *EntityJevClient) BuildQuestions() map[string]any {
 		"relevance": map[string]any{
 			"type":         "score",
 			"instructions": "Relevance score from 0.0 to 1.0.",
-			"criteria":     []string{"0.0", "0.25", "0.5", "0.75", "1.0"},
+			"criteria":     []string{"Not relevant", "Moderately relevant", "Highly relevant"},
 		},
 	}
 }
 
-func (c *EntityJevClient) Evaluate(ctx context.Context, state any) (*EntityJevDecisions, error) {
+func (c *EntityJevClient) Evaluate(ctx context.Context, state any) (*Entity, error) {
+	var stateJSON any
+	if pm, ok := state.(proto.Message); ok {
+		b, err := protojson.Marshal(pm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
+		}
+		if err := json.Unmarshal(b, &stateJSON); err != nil {
+			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
+		}
+	} else {
+		stateJSON = state
+	}
 	payload := map[string]any{
-		"state":     state,
+		"state":     stateJSON,
+		"model":     c.Model,
 		"questions": c.BuildQuestions(),
 	}
 	bodyBytes, err := json.Marshal(payload)
@@ -81,7 +117,8 @@ func (c *EntityJevClient) Evaluate(ctx context.Context, state any) (*EntityJevDe
 			Choice string `json:"choice"`
 		} `json:"choices"`
 		Nouls map[string]struct {
-			Result bool `json:"result"`
+			Result bool    `json:"result"`
+			Noul   float64 `json:"noul"`
 		} `json:"nouls"`
 		Scores map[string]struct {
 			Score float64 `json:"score"`
@@ -90,18 +127,26 @@ func (c *EntityJevClient) Evaluate(ctx context.Context, state any) (*EntityJevDe
 	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
-	decisions := &EntityJevDecisions{}
-	if item, ok := rawResp.Answers["relevance"]; ok && item.Score != 0 {
-		decisions.Relevance = item.Score
+	decisions := &Entity{}
+	var scorePos_relevance float64
+	var hasScore_relevance bool
+	if item, ok := rawResp.Answers["relevance"]; ok {
+		scorePos_relevance = item.Score
+		hasScore_relevance = true
 	} else if item, ok := rawResp.Scores["relevance"]; ok {
-		decisions.Relevance = item.Score
+		scorePos_relevance = item.Score
+		hasScore_relevance = true
+	}
+	if hasScore_relevance {
+		sVal := interpolateScore(scorePos_relevance, []float64{0, 0.5, 1})
+		decisions.Relevance = float32(sVal)
 	}
 	return decisions, nil
 }
 
 // BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *EntityJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*EntityJevDecisions, error) {
-	results := make([]*EntityJevDecisions, len(states))
+func (c *EntityJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*Entity, error) {
+	results := make([]*Entity, len(states))
 	for i, s := range states {
 		res, err := c.Evaluate(ctx, s)
 		if err != nil {
@@ -112,15 +157,11 @@ func (c *EntityJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*E
 	return results, nil
 }
 
-// NotificationJevDecisions holds structured decisions returned by Jev for Notification.
-type NotificationJevDecisions struct {
-	Channel string `json:"channel"`
-}
-
 // NotificationJevClient is a typed client for evaluating Notification decisions via Jev.
 type NotificationJevClient struct {
 	APIKey     string
 	Endpoint   string
+	Model      string
 	HTTPClient *http.Client
 }
 
@@ -131,7 +172,8 @@ func NewNotificationJevClient(apiKey string) *NotificationJevClient {
 	return &NotificationJevClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Model:      DefaultJevModel,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -140,14 +182,27 @@ func (c *NotificationJevClient) BuildQuestions() map[string]any {
 		"channel": map[string]any{
 			"type":         "choice",
 			"instructions": "Select channel variant",
-			"criteria":     map[string]any{"email": nil, "slack_channel": nil, "webhook_url": nil},
+			"criteria":     map[string]any{"email": "email", "slack_channel": "slack_channel", "webhook_url": "webhook_url"},
 		},
 	}
 }
 
-func (c *NotificationJevClient) Evaluate(ctx context.Context, state any) (*NotificationJevDecisions, error) {
+func (c *NotificationJevClient) Evaluate(ctx context.Context, state any) (*Notification, error) {
+	var stateJSON any
+	if pm, ok := state.(proto.Message); ok {
+		b, err := protojson.Marshal(pm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
+		}
+		if err := json.Unmarshal(b, &stateJSON); err != nil {
+			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
+		}
+	} else {
+		stateJSON = state
+	}
 	payload := map[string]any{
-		"state":     state,
+		"state":     stateJSON,
+		"model":     c.Model,
 		"questions": c.BuildQuestions(),
 	}
 	bodyBytes, err := json.Marshal(payload)
@@ -179,7 +234,8 @@ func (c *NotificationJevClient) Evaluate(ctx context.Context, state any) (*Notif
 			Choice string `json:"choice"`
 		} `json:"choices"`
 		Nouls map[string]struct {
-			Result bool `json:"result"`
+			Result bool    `json:"result"`
+			Noul   float64 `json:"noul"`
 		} `json:"nouls"`
 		Scores map[string]struct {
 			Score float64 `json:"score"`
@@ -188,18 +244,29 @@ func (c *NotificationJevClient) Evaluate(ctx context.Context, state any) (*Notif
 	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
-	decisions := &NotificationJevDecisions{}
+	decisions := &Notification{}
+	var choice_channel string
 	if item, ok := rawResp.Answers["channel"]; ok && item.Choice != "" {
-		decisions.Channel = item.Choice
+		choice_channel = item.Choice
 	} else if item, ok := rawResp.Choices["channel"]; ok {
-		decisions.Channel = item.Choice
+		choice_channel = item.Choice
+	}
+	if choice_channel != "" {
+		switch choice_channel {
+		case "email":
+			decisions.Channel = &Notification_Email{Email: choice_channel}
+		case "slack_channel":
+			decisions.Channel = &Notification_SlackChannel{SlackChannel: choice_channel}
+		case "webhook_url":
+			decisions.Channel = &Notification_WebhookUrl{WebhookUrl: choice_channel}
+		}
 	}
 	return decisions, nil
 }
 
 // BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *NotificationJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*NotificationJevDecisions, error) {
-	results := make([]*NotificationJevDecisions, len(states))
+func (c *NotificationJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*Notification, error) {
+	results := make([]*Notification, len(states))
 	for i, s := range states {
 		res, err := c.Evaluate(ctx, s)
 		if err != nil {
@@ -210,16 +277,11 @@ func (c *NotificationJevClient) BatchEvaluate(ctx context.Context, states []any)
 	return results, nil
 }
 
-// ActionItemJevDecisions holds structured decisions returned by Jev for ActionItem.
-type ActionItemJevDecisions struct {
-	Priority                string `json:"priority"`
-	RequiresImmediateAction bool   `json:"requiresImmediateAction"`
-}
-
 // ActionItemJevClient is a typed client for evaluating ActionItem decisions via Jev.
 type ActionItemJevClient struct {
 	APIKey     string
 	Endpoint   string
+	Model      string
 	HTTPClient *http.Client
 }
 
@@ -230,7 +292,8 @@ func NewActionItemJevClient(apiKey string) *ActionItemJevClient {
 	return &ActionItemJevClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Model:      DefaultJevModel,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -239,7 +302,7 @@ func (c *ActionItemJevClient) BuildQuestions() map[string]any {
 		"priority": map[string]any{
 			"type":         "choice",
 			"instructions": "Urgency and priority level of the task.",
-			"criteria":     map[string]any{"PRIORITY_HIGH": nil, "PRIORITY_LOW": nil, "PRIORITY_MEDIUM": nil, "PRIORITY_URGENT": nil},
+			"criteria":     map[string]any{"PRIORITY_HIGH": "", "PRIORITY_LOW": "", "PRIORITY_MEDIUM": "", "PRIORITY_URGENT": ""},
 		},
 		"requiresImmediateAction": map[string]any{
 			"type":         "noul",
@@ -248,9 +311,22 @@ func (c *ActionItemJevClient) BuildQuestions() map[string]any {
 	}
 }
 
-func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionItemJevDecisions, error) {
+func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionItem, error) {
+	var stateJSON any
+	if pm, ok := state.(proto.Message); ok {
+		b, err := protojson.Marshal(pm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
+		}
+		if err := json.Unmarshal(b, &stateJSON); err != nil {
+			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
+		}
+	} else {
+		stateJSON = state
+	}
 	payload := map[string]any{
-		"state":     state,
+		"state":     stateJSON,
+		"model":     c.Model,
 		"questions": c.BuildQuestions(),
 	}
 	bodyBytes, err := json.Marshal(payload)
@@ -282,7 +358,8 @@ func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionI
 			Choice string `json:"choice"`
 		} `json:"choices"`
 		Nouls map[string]struct {
-			Result bool `json:"result"`
+			Result bool    `json:"result"`
+			Noul   float64 `json:"noul"`
 		} `json:"nouls"`
 		Scores map[string]struct {
 			Score float64 `json:"score"`
@@ -291,11 +368,17 @@ func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionI
 	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
-	decisions := &ActionItemJevDecisions{}
+	decisions := &ActionItem{}
+	var choice_priority string
 	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
-		decisions.Priority = item.Choice
+		choice_priority = item.Choice
 	} else if item, ok := rawResp.Choices["priority"]; ok {
-		decisions.Priority = item.Choice
+		choice_priority = item.Choice
+	}
+	if choice_priority != "" {
+		if val, ok := Priority_value[choice_priority]; ok {
+			decisions.Priority = Priority(val)
+		}
 	}
 	if item, ok := rawResp.Answers["requiresImmediateAction"]; ok && item.Noul != nil {
 		switch v := item.Noul.(type) {
@@ -305,14 +388,18 @@ func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionI
 			decisions.RequiresImmediateAction = v >= 0.5
 		}
 	} else if item, ok := rawResp.Nouls["requiresImmediateAction"]; ok {
-		decisions.RequiresImmediateAction = item.Result
+		if item.Noul != 0 {
+			decisions.RequiresImmediateAction = item.Noul >= 0.5
+		} else {
+			decisions.RequiresImmediateAction = item.Result
+		}
 	}
 	return decisions, nil
 }
 
 // BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *ActionItemJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*ActionItemJevDecisions, error) {
-	results := make([]*ActionItemJevDecisions, len(states))
+func (c *ActionItemJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*ActionItem, error) {
+	results := make([]*ActionItem, len(states))
 	for i, s := range states {
 		res, err := c.Evaluate(ctx, s)
 		if err != nil {
@@ -323,16 +410,11 @@ func (c *ActionItemJevClient) BatchEvaluate(ctx context.Context, states []any) (
 	return results, nil
 }
 
-// AnalysisReportJevDecisions holds structured decisions returned by Jev for AnalysisReport.
-type AnalysisReportJevDecisions struct {
-	Sentiment       string  `json:"sentiment"`
-	ConfidenceScore float64 `json:"confidenceScore"`
-}
-
 // AnalysisReportJevClient is a typed client for evaluating AnalysisReport decisions via Jev.
 type AnalysisReportJevClient struct {
 	APIKey     string
 	Endpoint   string
+	Model      string
 	HTTPClient *http.Client
 }
 
@@ -343,7 +425,8 @@ func NewAnalysisReportJevClient(apiKey string) *AnalysisReportJevClient {
 	return &AnalysisReportJevClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Model:      DefaultJevModel,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -352,19 +435,32 @@ func (c *AnalysisReportJevClient) BuildQuestions() map[string]any {
 		"sentiment": map[string]any{
 			"type":         "choice",
 			"instructions": "Overall sentiment detected in the text.",
-			"criteria":     map[string]any{"SENTIMENT_NEGATIVE": nil, "SENTIMENT_NEUTRAL": nil, "SENTIMENT_POSITIVE": nil},
+			"criteria":     map[string]any{"SENTIMENT_NEGATIVE": "", "SENTIMENT_NEUTRAL": "", "SENTIMENT_POSITIVE": ""},
 		},
 		"confidenceScore": map[string]any{
 			"type":         "score",
 			"instructions": "Confidence score of the overall analysis between 0.0 and 1.0.",
-			"criteria":     []string{"0.0", "0.25", "0.5", "0.75", "1.0"},
+			"criteria":     []string{"Low confidence", "Medium confidence", "High confidence"},
 		},
 	}
 }
 
-func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, state any) (*AnalysisReportJevDecisions, error) {
+func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, state any) (*AnalysisReport, error) {
+	var stateJSON any
+	if pm, ok := state.(proto.Message); ok {
+		b, err := protojson.Marshal(pm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
+		}
+		if err := json.Unmarshal(b, &stateJSON); err != nil {
+			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
+		}
+	} else {
+		stateJSON = state
+	}
 	payload := map[string]any{
-		"state":     state,
+		"state":     stateJSON,
+		"model":     c.Model,
 		"questions": c.BuildQuestions(),
 	}
 	bodyBytes, err := json.Marshal(payload)
@@ -396,7 +492,8 @@ func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, state any) (*Ana
 			Choice string `json:"choice"`
 		} `json:"choices"`
 		Nouls map[string]struct {
-			Result bool `json:"result"`
+			Result bool    `json:"result"`
+			Noul   float64 `json:"noul"`
 		} `json:"nouls"`
 		Scores map[string]struct {
 			Score float64 `json:"score"`
@@ -405,23 +502,37 @@ func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, state any) (*Ana
 	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
-	decisions := &AnalysisReportJevDecisions{}
+	decisions := &AnalysisReport{}
+	var choice_sentiment string
 	if item, ok := rawResp.Answers["sentiment"]; ok && item.Choice != "" {
-		decisions.Sentiment = item.Choice
+		choice_sentiment = item.Choice
 	} else if item, ok := rawResp.Choices["sentiment"]; ok {
-		decisions.Sentiment = item.Choice
+		choice_sentiment = item.Choice
 	}
-	if item, ok := rawResp.Answers["confidenceScore"]; ok && item.Score != 0 {
-		decisions.ConfidenceScore = item.Score
+	if choice_sentiment != "" {
+		if val, ok := Sentiment_value[choice_sentiment]; ok {
+			decisions.Sentiment = Sentiment(val)
+		}
+	}
+	var scorePos_confidenceScore float64
+	var hasScore_confidenceScore bool
+	if item, ok := rawResp.Answers["confidenceScore"]; ok {
+		scorePos_confidenceScore = item.Score
+		hasScore_confidenceScore = true
 	} else if item, ok := rawResp.Scores["confidenceScore"]; ok {
-		decisions.ConfidenceScore = item.Score
+		scorePos_confidenceScore = item.Score
+		hasScore_confidenceScore = true
+	}
+	if hasScore_confidenceScore {
+		sVal := interpolateScore(scorePos_confidenceScore, []float64{0, 0.5, 1})
+		decisions.ConfidenceScore = float32(sVal)
 	}
 	return decisions, nil
 }
 
 // BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *AnalysisReportJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*AnalysisReportJevDecisions, error) {
-	results := make([]*AnalysisReportJevDecisions, len(states))
+func (c *AnalysisReportJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*AnalysisReport, error) {
+	results := make([]*AnalysisReport, len(states))
 	for i, s := range states {
 		res, err := c.Evaluate(ctx, s)
 		if err != nil {

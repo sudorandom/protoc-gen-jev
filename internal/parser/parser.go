@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -16,9 +17,11 @@ import (
 
 // ProcessMessage parses a single Protobuf message into a Jev MessageSpec.
 func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
+	fileBase := strings.TrimSuffix(filepath.Base(string(msg.Desc.ParentFile().Path())), ".proto")
 	spec := model.MessageSpec{
 		MessageName: string(msg.Desc.Name()),
 		Package:     string(msg.Desc.ParentFile().Package()),
+		FileBase:    fileBase,
 		Questions:   make(map[string]model.Question),
 	}
 
@@ -40,19 +43,34 @@ func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
 				}
 
 				criteria := make(map[string]any)
+				oneofCases := make(map[string]string)
+				oneofCaseKinds := make(map[string]string)
 				for _, f := range oneof.Fields {
-					criteria[string(f.Desc.Name())] = nil
+					fName := string(f.Desc.Name())
+					fDoc := CleanComments(f.Comments.Leading.String())
+					if fDoc == "" {
+						fDoc = fName
+					}
+					criteria[fName] = fDoc
+					oneofCases[fName] = ToPascalCase(fName)
+					oneofCaseKinds[fName] = f.Desc.Kind().String()
 				}
 
 				jsonName := string(oneof.Desc.Name())
 				goFieldName := ToPascalCase(jsonName)
 				spec.Questions[jsonName] = model.Question{
-					Type:         model.TypeChoice,
-					Instructions: instructions,
-					Criteria:     criteria,
-					ProtoField:   jsonName,
-					JSONField:    jsonName,
-					GoField:      goFieldName,
+					Type:           model.TypeChoice,
+					Instructions:   instructions,
+					Criteria:       criteria,
+					ProtoField:     jsonName,
+					JSONField:      jsonName,
+					GoField:        goFieldName,
+					PyField:        jsonName,
+					FieldType:      "oneof",
+					IsOneof:        true,
+					OneofName:      oneofName,
+					OneofCases:     oneofCases,
+					OneofCaseKinds: oneofCaseKinds,
 				}
 				spec.Order = append(spec.Order, jsonName)
 			}
@@ -76,7 +94,28 @@ func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
 			continue
 		}
 
-		// 3. Resolve instructions: custom option takes priority, then doc comment, then fallback
+		// 3. Strict type checking: fail fast on unsupported Protobuf structures when annotated for Jev
+		if jevOpt != nil {
+			if desc.IsList() {
+				return spec, fmt.Errorf("field %q: repeated fields are not yet supported by protoc-gen-jev", desc.FullName())
+			}
+			if desc.IsMap() {
+				return spec, fmt.Errorf("field %q: map fields are not yet supported by protoc-gen-jev", desc.FullName())
+			}
+			if desc.Kind() == protoreflect.MessageKind {
+				return spec, fmt.Errorf("field %q: nested message fields are not yet supported by protoc-gen-jev", desc.FullName())
+			}
+			if desc.Kind() == protoreflect.BytesKind {
+				return spec, fmt.Errorf("field %q: bytes fields are not yet supported by protoc-gen-jev", desc.FullName())
+			}
+		} else {
+			// Unannotated complex fields are ignored as non-decision fields
+			if desc.IsList() || desc.IsMap() || desc.Kind() == protoreflect.MessageKind || desc.Kind() == protoreflect.BytesKind {
+				continue
+			}
+		}
+
+		// 4. Resolve instructions: custom option takes priority, then doc comment, then fallback
 		instructions := CleanComments(field.Comments.Leading.String())
 		if customInstructions != "" {
 			instructions = customInstructions
@@ -86,7 +125,7 @@ func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
 
 		goFieldName := ToPascalCase(desc.JSONName())
 
-		// 4. Explicit primitive overrides or natural Protobuf kind mapping
+		// 5. Explicit primitive overrides or natural Protobuf kind mapping
 		var choiceRule *jevv1.ChoiceRules
 		var scoreRule *jevv1.ScoreRules
 		var noulRule *jevv1.NoulRules
@@ -116,6 +155,13 @@ func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
 			if len(criteria) == 0 {
 				return spec, fmt.Errorf("field %q: choice question has no valid choices", desc.FullName())
 			}
+			fieldType := "string"
+			isEnum := desc.Kind() == protoreflect.EnumKind
+			enumName := ""
+			if isEnum {
+				fieldType = "enum"
+				enumName = string(desc.Enum().Name())
+			}
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeChoice,
 				Instructions: instructions,
@@ -123,49 +169,56 @@ func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
 				ProtoField:   string(desc.Name()),
 				JSONField:    desc.JSONName(),
 				GoField:      goFieldName,
+				PyField:      string(desc.Name()),
+				FieldType:    fieldType,
+				IsEnum:       isEnum,
+				EnumTypeName: enumName,
 			}
 			spec.Order = append(spec.Order, desc.JSONName())
 			continue
 		}
 
 		if scoreRule != nil {
-			if (scoreRule.Min != 0 || scoreRule.Max != 0) && scoreRule.Min > scoreRule.Max {
-				return spec, fmt.Errorf("field %q: score min (%v) cannot be greater than max (%v)", desc.FullName(), scoreRule.Min, scoreRule.Max)
+			levels, criteria, err := resolveScoreLevels(desc, scoreRule)
+			if err != nil {
+				return spec, err
 			}
-			if len(scoreRule.Scale) > 0 && len(scoreRule.Scale) < 2 {
-				return spec, fmt.Errorf("field %q: score scale must contain at least 2 distinct values", desc.FullName())
-			}
-			var criteria []string
-			if isIntegerKind(desc.Kind()) {
-				criteria = resolveIntCriteria(desc, scoreRule)
-			} else {
-				criteria = resolveFloatCriteria(desc, scoreRule)
-			}
+			fieldType := resolveNumberFieldType(desc.Kind())
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeScore,
 				Instructions: instructions,
 				Criteria:     criteria,
+				ScoreLevels:  levels,
 				ProtoField:   string(desc.Name()),
 				JSONField:    desc.JSONName(),
 				GoField:      goFieldName,
+				PyField:      string(desc.Name()),
+				FieldType:    fieldType,
 			}
 			spec.Order = append(spec.Order, desc.JSONName())
 			continue
 		}
 
 		if noulRule != nil || desc.Kind() == protoreflect.BoolKind {
+			threshold := 0.5
+			if noulRule != nil && noulRule.Threshold > 0 {
+				threshold = float64(noulRule.Threshold)
+			}
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeNoul,
 				Instructions: instructions,
+				Threshold:    threshold,
 				ProtoField:   string(desc.Name()),
 				JSONField:    desc.JSONName(),
 				GoField:      goFieldName,
+				PyField:      string(desc.Name()),
+				FieldType:    "bool",
 			}
 			spec.Order = append(spec.Order, desc.JSONName())
 			continue
 		}
 
-		// 5. Default mapping based on Protobuf kind
+		// 6. Default mapping based on Protobuf kind
 		switch desc.Kind() {
 		case protoreflect.EnumKind:
 			criteria := resolveEnumCriteria(desc.Enum(), nil)
@@ -177,39 +230,84 @@ func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
 					ProtoField:   string(desc.Name()),
 					JSONField:    desc.JSONName(),
 					GoField:      goFieldName,
+					PyField:      string(desc.Name()),
+					FieldType:    "enum",
+					IsEnum:       true,
+					EnumTypeName: string(desc.Enum().Name()),
 				}
 				spec.Order = append(spec.Order, desc.JSONName())
 			}
 
 		case protoreflect.FloatKind, protoreflect.DoubleKind:
-			criteria := resolveFloatCriteria(desc, nil)
+			levels, criteria, err := resolveScoreLevels(desc, nil)
+			if err != nil {
+				return spec, err
+			}
+			fType := "float64"
+			if desc.Kind() == protoreflect.FloatKind {
+				fType = "float32"
+			}
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeScore,
 				Instructions: instructions,
 				Criteria:     criteria,
+				ScoreLevels:  levels,
 				ProtoField:   string(desc.Name()),
 				JSONField:    desc.JSONName(),
 				GoField:      goFieldName,
+				PyField:      string(desc.Name()),
+				FieldType:    fType,
 			}
 			spec.Order = append(spec.Order, desc.JSONName())
 
 		case protoreflect.Int32Kind, protoreflect.Int64Kind,
 			protoreflect.Sint32Kind, protoreflect.Sint64Kind,
 			protoreflect.Uint32Kind, protoreflect.Uint64Kind:
-			criteria := resolveIntCriteria(desc, nil)
+			levels, criteria, err := resolveScoreLevels(desc, nil)
+			if err != nil {
+				return spec, err
+			}
+			iType := "int32"
+			if desc.Kind() == protoreflect.Int64Kind || desc.Kind() == protoreflect.Sint64Kind || desc.Kind() == protoreflect.Uint64Kind {
+				iType = "int64"
+			}
 			spec.Questions[desc.JSONName()] = model.Question{
 				Type:         model.TypeScore,
 				Instructions: instructions,
 				Criteria:     criteria,
+				ScoreLevels:  levels,
 				ProtoField:   string(desc.Name()),
 				JSONField:    desc.JSONName(),
 				GoField:      goFieldName,
+				PyField:      string(desc.Name()),
+				FieldType:    iType,
 			}
 			spec.Order = append(spec.Order, desc.JSONName())
+		case protoreflect.StringKind:
+			// Plain string without choice rule is not a decision question; ignore
+		default:
+			return spec, fmt.Errorf("field %q: unsupported Protobuf kind %v", desc.FullName(), desc.Kind())
 		}
 	}
 
 	return spec, nil
+}
+
+func resolveNumberFieldType(k protoreflect.Kind) string {
+	switch k {
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+		return "int32"
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		return "int64"
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+		return "uint32"
+	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		return "uint64"
+	case protoreflect.FloatKind:
+		return "float32"
+	default:
+		return "float64"
+	}
 }
 
 func isIntegerKind(k protoreflect.Kind) bool {
@@ -223,7 +321,7 @@ func isIntegerKind(k protoreflect.Kind) bool {
 	}
 }
 
-// resolveEnumCriteria respects choice.choices, choice.not_in, and choice.criteria options.
+// resolveEnumCriteria respects choice.choices, choice.not_in, and choice.criteria options, preserving descriptions.
 func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, rule *jevv1.ChoiceRules) map[string]any {
 	var choicesMap, notInMap map[string]bool
 	if rule != nil {
@@ -256,20 +354,20 @@ func resolveEnumCriteria(enumDesc protoreflect.EnumDescriptor, rule *jevv1.Choic
 		if len(notInMap) > 0 && notInMap[valName] {
 			continue
 		}
-		criteria[valName] = nil
+		criteria[valName] = ""
 	}
 
-	// Jev options criteria overrides or supplements
+	// Jev options criteria overrides or supplements (preserve descriptions)
 	if rule != nil && len(rule.GetCriteria()) > 0 {
-		for k := range rule.GetCriteria() {
-			criteria[k] = nil
+		for k, v := range rule.GetCriteria() {
+			criteria[k] = v
 		}
 	}
 
 	return criteria
 }
 
-// resolveStringCriteria maps string fields to Choice when discrete values or criteria are configured.
+// resolveStringCriteria maps string fields to Choice when discrete values or criteria are configured, preserving descriptions.
 func resolveStringCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.ChoiceRules) map[string]any {
 	criteria := make(map[string]any)
 	if rule == nil {
@@ -277,10 +375,10 @@ func resolveStringCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.Choice
 	}
 
 	for _, val := range rule.GetChoices() {
-		criteria[val] = nil
+		criteria[val] = ""
 	}
-	for k := range rule.GetCriteria() {
-		criteria[k] = nil
+	for k, v := range rule.GetCriteria() {
+		criteria[k] = v
 	}
 
 	return criteria
@@ -294,78 +392,49 @@ func resolveExplicitChoiceCriteria(desc protoreflect.FieldDescriptor, rule *jevv
 	return resolveStringCriteria(desc, rule)
 }
 
-// resolveIntCriteria calculates dynamic rubrics from score.scale, or score.min/max bounds.
-func resolveIntCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.ScoreRules) []string {
-	if rule != nil && len(rule.GetScale()) > 0 {
-		var res []string
-		for _, v := range rule.GetScale() {
-			res = append(res, strconv.FormatInt(int64(v), 10))
-		}
-		return res
-	}
-
-	var hasMin, hasMax bool
-	var minVal, maxVal int64
-	if rule != nil && (rule.Min != 0 || rule.Max != 0) {
-		hasMin = true
-		hasMax = true
-		minVal = int64(rule.Min)
-		maxVal = int64(rule.Max)
-	}
-
-	if hasMin && hasMax && maxVal >= minVal {
-		count := maxVal - minVal + 1
-		if count <= 10 {
-			var res []string
-			for v := minVal; v <= maxVal; v++ {
-				res = append(res, strconv.FormatInt(v, 10))
+// resolveScoreLevels extracts explicit score levels or provides defaults if rule is nil.
+func resolveScoreLevels(desc protoreflect.FieldDescriptor, rule *jevv1.ScoreRules) ([]model.ScoreLevel, []string, error) {
+	if rule != nil {
+		if len(rule.GetLevels()) < 2 {
+			fName := "unknown"
+			if desc != nil {
+				fName = string(desc.FullName())
 			}
-			return res
+			return nil, nil, fmt.Errorf("field %q: score question must specify at least 2 levels", fName)
 		}
-		step := float64(maxVal-minVal) / 4.0
-		return []string{
-			strconv.FormatInt(minVal, 10),
-			strconv.FormatInt(minVal+int64(math.Round(step*1)), 10),
-			strconv.FormatInt(minVal+int64(math.Round(step*2)), 10),
-			strconv.FormatInt(minVal+int64(math.Round(step*3)), 10),
-			strconv.FormatInt(maxVal, 10),
+		var levels []model.ScoreLevel
+		var criteria []string
+		for _, l := range rule.GetLevels() {
+			levels = append(levels, model.ScoreLevel{
+				Value:       l.GetValue(),
+				Description: l.GetDescription(),
+			})
+			descText := l.GetDescription()
+			if descText == "" {
+				descText = formatFloat(l.GetValue())
+			}
+			criteria = append(criteria, descText)
 		}
+		return levels, criteria, nil
 	}
 
-	return []string{"1", "2", "3", "4", "5"}
-}
-
-// resolveFloatCriteria calculates dynamic rubrics from score.scale, or score.min/max bounds.
-func resolveFloatCriteria(desc protoreflect.FieldDescriptor, rule *jevv1.ScoreRules) []string {
-	if rule != nil && len(rule.GetScale()) > 0 {
-		var res []string
-		for _, v := range rule.GetScale() {
-			res = append(res, formatFloat(float64(v)))
+	// Default fallback when field has no explicit score rules
+	var levels []model.ScoreLevel
+	var criteria []string
+	if isIntegerKind(desc.Kind()) {
+		for v := int64(1); v <= 5; v++ {
+			s := strconv.FormatInt(v, 10)
+			levels = append(levels, model.ScoreLevel{Value: float64(v), Description: s})
+			criteria = append(criteria, s)
 		}
-		return res
-	}
-
-	var hasMin, hasMax bool
-	var minVal, maxVal float64
-	if rule != nil && (rule.Min != 0 || rule.Max != 0) {
-		hasMin = true
-		hasMax = true
-		minVal = float64(rule.Min)
-		maxVal = float64(rule.Max)
-	}
-
-	if hasMin && hasMax && maxVal >= minVal {
-		step := (maxVal - minVal) / 4.0
-		return []string{
-			formatFloat(minVal),
-			formatFloat(minVal + step*1),
-			formatFloat(minVal + step*2),
-			formatFloat(minVal + step*3),
-			formatFloat(maxVal),
+	} else {
+		for _, v := range []float64{0.0, 0.25, 0.5, 0.75, 1.0} {
+			s := formatFloat(v)
+			levels = append(levels, model.ScoreLevel{Value: v, Description: s})
+			criteria = append(criteria, s)
 		}
 	}
-
-	return []string{"0.0", "0.25", "0.5", "0.75", "1.0"}
+	return levels, criteria, nil
 }
 
 func formatFloat(v float64) string {
@@ -408,9 +477,11 @@ func ToPascalCase(s string) string {
 
 // ProcessService parses a Protobuf service into a Jev ServiceSpec.
 func ProcessService(svc *protogen.Service) (model.ServiceSpec, error) {
+	fileBase := strings.TrimSuffix(filepath.Base(string(svc.Desc.ParentFile().Path())), ".proto")
 	spec := model.ServiceSpec{
 		ServiceName: string(svc.Desc.Name()),
 		Package:     string(svc.Desc.ParentFile().Package()),
+		FileBase:    fileBase,
 	}
 
 	// Check service-level options
@@ -470,7 +541,20 @@ func ProcessService(svc *protogen.Service) (model.ServiceSpec, error) {
 
 		var inputFields []model.FieldSpec
 		for _, f := range method.Input.Fields {
-			t := "string"
+			if f.Desc.IsList() {
+				return spec, fmt.Errorf("method %q: input field %q: repeated fields are not yet supported by protoc-gen-jev", method.Desc.FullName(), f.Desc.FullName())
+			}
+			if f.Desc.IsMap() {
+				return spec, fmt.Errorf("method %q: input field %q: map fields are not yet supported by protoc-gen-jev", method.Desc.FullName(), f.Desc.FullName())
+			}
+			if f.Desc.Kind() == protoreflect.MessageKind {
+				return spec, fmt.Errorf("method %q: input field %q: nested message fields are not yet supported by protoc-gen-jev", method.Desc.FullName(), f.Desc.FullName())
+			}
+			if f.Desc.Kind() == protoreflect.BytesKind {
+				return spec, fmt.Errorf("method %q: input field %q: bytes fields are not yet supported by protoc-gen-jev", method.Desc.FullName(), f.Desc.FullName())
+			}
+
+			var t string
 			switch f.Desc.Kind() {
 			case protoreflect.BoolKind:
 				t = "bool"
@@ -482,6 +566,12 @@ func ProcessService(svc *protogen.Service) (model.ServiceSpec, error) {
 				t = "float32"
 			case protoreflect.DoubleKind:
 				t = "float64"
+			case protoreflect.StringKind:
+				t = "string"
+			case protoreflect.EnumKind:
+				t = "enum"
+			default:
+				return spec, fmt.Errorf("method %q: input field %q: unsupported type %v", method.Desc.FullName(), f.Desc.FullName(), f.Desc.Kind())
 			}
 			jsonName := string(f.Desc.Name())
 			inputFields = append(inputFields, model.FieldSpec{

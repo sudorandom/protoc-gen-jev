@@ -108,21 +108,23 @@ message ChoiceRules {
   map<string, string> criteria = 3;
 }
 
+// ScoreLevel defines a discrete point or tier on an evaluation rubric.
+message ScoreLevel {
+  // Target numerical domain value (e.g. 1.0, 5.0, 100.0).
+  double value = 1;
+
+  // Semantic description or rubric guidance passed to Jev for this level.
+  string description = 2;
+}
+
 // ScoreRules configures a Jev Score question (numerical scale / rubric evaluation).
 //
 // Models quantitative ratings and confidence assessments along an ordered scale.
 //
 // See: https://docs.typesafe.ai/primitives/score (Score Question Specification)
 message ScoreRules {
-  // Minimum value of the evaluation rubric scale (default: 0.0).
-  float min = 1;
-
-  // Maximum value of the evaluation rubric scale (default: 100.0).
-  float max = 2;
-
-  // Explicit discrete scale points or rubric tiers (e.g. [1, 2, 3, 4, 5] or [0.0, 25.0, 50.0, 75.0, 100.0]).
-  // When specified, Jev scores against these exact discrete rubric values.
-  repeated float scale = 3;
+  // Explicit ordered rubric levels with domain values and descriptions.
+  repeated ScoreLevel levels = 1;
 }
 
 // NoulRules configures a Jev Noul question (binary yes/no condition classification).

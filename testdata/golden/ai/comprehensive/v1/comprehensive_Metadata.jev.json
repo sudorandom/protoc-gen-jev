@@ -1,6 +1,7 @@
 {
   "message_name": "Metadata",
   "package": "ai.comprehensive.v1",
+  "file_base": "comprehensive",
   "questions": {
     "version": {
       "type": "Score",
@@ -12,9 +13,33 @@
         "4",
         "5"
       ],
+      "score_levels": [
+        {
+          "value": 1,
+          "description": "1"
+        },
+        {
+          "value": 2,
+          "description": "2"
+        },
+        {
+          "value": 3,
+          "description": "3"
+        },
+        {
+          "value": 4,
+          "description": "4"
+        },
+        {
+          "value": 5,
+          "description": "5"
+        }
+      ],
       "proto_field": "version",
       "json_field": "version",
-      "go_field": "Version"
+      "go_field": "Version",
+      "py_field": "version",
+      "field_type": "int32"
     }
   },
   "order": [

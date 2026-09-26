@@ -33,7 +33,13 @@ message Entity {
   
   // Relevance score from 0.0 to 1.0.
   float relevance = 3 [
-    (jev.v1.field).score = { min: 0.0, max: 1.0 }
+    (jev.v1.field).score = {
+      levels: [
+        { value: 0.0, description: "Not relevant" },
+        { value: 0.5, description: "Moderately relevant" },
+        { value: 1.0, description: "Highly relevant" }
+      ]
+    }
   ];
 }
 
@@ -79,7 +85,13 @@ message AnalysisReport {
 
   // Confidence score of the overall analysis between 0.0 and 1.0.
   float confidence_score = 4 [
-    (jev.v1.field).score = { min: 0.0, max: 1.0 }
+    (jev.v1.field).score = {
+      levels: [
+        { value: 0.0, description: "Low confidence" },
+        { value: 0.5, description: "Medium confidence" },
+        { value: 1.0, description: "High confidence" }
+      ]
+    }
   ];
 
   // Key takeaways and findings extracted from the text.

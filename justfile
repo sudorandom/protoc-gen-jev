@@ -20,7 +20,7 @@ generate: build
 	@echo "Running buf generate for testdata..."
 	buf generate
 	@echo "Running buf generate for examples..."
-	buf generate --template examples/buf.gen.yaml examples/proto
+	buf generate --template examples/buf.gen.yaml
 	@echo "✔ Code generation complete."
 
 # Re-generate Go bindings for jev/v1 options
@@ -41,7 +41,7 @@ test-syntax: generate
 	@echo "Checking generated Python syntax..."
 	python -c "import py_compile, glob; [py_compile.compile(f, doraise=True) for f in glob.glob('gen/jev/**/*.py', recursive=True)]"
 	@echo "Checking generated TypeScript type signatures..."
-	npx --package typescript tsc --noEmit --skipLibCheck testdata/types/@typesafe-ai/sdk/index.d.ts `find gen/jev -name "*.ts"`
+	npx --prefix examples/typescript tsc --noEmit -p testdata/tsconfig.json
 	@echo "✔ Generated Go, Python, and TypeScript code verified."
 
 # Compile and verify all examples without executing them

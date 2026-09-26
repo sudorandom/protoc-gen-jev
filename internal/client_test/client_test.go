@@ -111,13 +111,13 @@ func TestGeneratedClient_Evaluate(t *testing.T) {
 				"decisionFlag":      map[string]any{"choice": "APPROVE"},
 			},
 			"scores": map[string]any{
-				"ratingSmall":        map[string]any{"score": 5},
-				"ratingStrict":       map[string]any{"score": 3},
-				"discreteCode":       map[string]any{"score": 100},
-				"largeScale":         map[string]any{"score": 750},
-				"temperature":        map[string]any{"score": 35.0},
-				"discreteRatio":      map[string]any{"score": 0.8},
-				"customBoundedScore": map[string]any{"score": 40.0},
+				"ratingSmall":        map[string]any{"score": 4.0}, // index 4 in [1,2,3,4,5] -> 5
+				"ratingStrict":       map[string]any{"score": 2.0}, // index 2 in [1,2,3] -> 3
+				"discreteCode":       map[string]any{"score": 3.0}, // index 3 in [10,20,50,100] -> 100
+				"largeScale":         map[string]any{"score": 3.0}, // index 3 in [0,250,500,750,1000] -> 750
+				"temperature":        map[string]any{"score": 3.0}, // index 3 in [-40,-15,10,35,60] -> 35.0
+				"discreteRatio":      map[string]any{"score": 2.0}, // index 2 in [0.2,0.5,0.8] -> 0.8
+				"customBoundedScore": map[string]any{"score": 3.0}, // index 3 in [10,20,30,40,50] -> 40.0
 			},
 		}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -131,11 +131,11 @@ func TestGeneratedClient_Evaluate(t *testing.T) {
 	decisions, err := client.Evaluate(context.Background(), map[string]any{"text": "Sample request"})
 	require.NoError(t, err)
 
-	assert.Equal(t, "email", decisions.DeliveryMethod)
-	assert.Equal(t, "MODE_FAST", decisions.ExecutionMode)
-	assert.InDelta(t, 5.0, decisions.RatingSmall, 0.001)
-	assert.Equal(t, "TOP_SECRET", decisions.SecurityClearance)
-	assert.InDelta(t, 40.0, decisions.CustomBoundedScore, 0.001)
+	assert.Equal(t, "email", decisions.GetEmail())
+	assert.Equal(t, rulesv1.Mode_MODE_FAST, decisions.GetExecutionMode())
+	assert.Equal(t, int32(5), decisions.GetRatingSmall())
+	assert.Equal(t, "TOP_SECRET", decisions.GetSecurityClearance())
+	assert.InDelta(t, 40.0, float64(decisions.GetCustomBoundedScore()), 0.001)
 }
 
 func TestGeneratedClient_BatchEvaluate(t *testing.T) {
@@ -147,7 +147,7 @@ func TestGeneratedClient_BatchEvaluate(t *testing.T) {
 				"delivery_method": map[string]any{"choice": "sms"},
 			},
 			"scores": map[string]any{
-				"ratingSmall": map[string]any{"score": 4},
+				"ratingSmall": map[string]any{"score": 3.0}, // index 3 in [1,2,3,4,5] -> 4
 			},
 		}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -170,8 +170,8 @@ func TestGeneratedClient_BatchEvaluate(t *testing.T) {
 	assert.Equal(t, 3, callCount)
 
 	for _, dec := range results {
-		assert.Equal(t, "sms", dec.DeliveryMethod)
-		assert.InDelta(t, 4.0, dec.RatingSmall, 0.001)
+		assert.Equal(t, "sms", dec.GetSms())
+		assert.Equal(t, int32(4), dec.GetRatingSmall())
 	}
 }
 

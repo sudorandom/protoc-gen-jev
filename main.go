@@ -41,6 +41,9 @@ func main() {
 			if !f.Generate {
 				continue
 			}
+			if f.Desc.Package() == "jev.v1" {
+				continue
+			}
 
 			var specs []model.MessageSpec
 			for _, msg := range f.Messages {

@@ -126,7 +126,7 @@ import "jev/v1/options.proto";
 
 message BadField {
   int32 mixed = 1 [
-    (jev.v1.field).score = { min: 1, max: 5 },
+    (jev.v1.field).score = { levels: [{value: 1, description: "A"}, {value: 2, description: "B"}] },
     (jev.v1.field).choice = { choices: ["A", "B"] }
   ];
 }`
@@ -141,7 +141,7 @@ message BadField {
 	require.Contains(t, err.Error(), "cannot specify more than one Jev primitive")
 }
 
-func TestSanity_ScoreMinGreaterThanMax(t *testing.T) {
+func TestSanity_ScoreTooFewLevels(t *testing.T) {
 	src := `syntax = "proto3";
 package test.v1;
 option go_package = "test/v1;testv1";
@@ -149,7 +149,11 @@ import "jev/v1/options.proto";
 
 message BadScore {
   int32 val = 1 [
-    (jev.v1.field).score = { min: 10, max: 2 }
+    (jev.v1.field).score = {
+      levels: [
+        { value: 1, description: "OnlyOne" }
+      ]
+    }
   ];
 }`
 
@@ -160,29 +164,7 @@ message BadScore {
 
 	_, err := parser.ProcessMessage(file.Messages[0])
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "score min (10) cannot be greater than max (2)")
-}
-
-func TestSanity_ScoreScaleTooSmall(t *testing.T) {
-	src := `syntax = "proto3";
-package test.v1;
-option go_package = "test/v1;testv1";
-import "jev/v1/options.proto";
-
-message BadScale {
-  float val = 1 [
-    (jev.v1.field).score = { scale: [1.0] }
-  ];
-}`
-
-	gen := compileProto(t, src)
-	file := gen.FilesByPath["test.proto"]
-	require.NotNil(t, file)
-	require.Len(t, file.Messages, 1)
-
-	_, err := parser.ProcessMessage(file.Messages[0])
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "score scale must contain at least 2 distinct values")
+	require.Contains(t, err.Error(), "score question must specify at least 2 levels")
 }
 
 func TestSanity_ChoiceNoChoices(t *testing.T) {
@@ -277,7 +259,8 @@ message Resp {
 service DisabledService {
   option (jev.v1.service).enabled = false;
   rpc Method1(Req) returns (Resp);
-}`
+}
+`
 
 	gen := compileProto(t, src)
 	file := gen.FilesByPath["test.proto"]
@@ -287,4 +270,92 @@ service DisabledService {
 	spec, err := parser.ProcessService(file.Services[0])
 	require.NoError(t, err)
 	require.Empty(t, spec.Methods)
+}
+
+func TestSanity_UnsupportedRepeatedField(t *testing.T) {
+	src := `syntax = "proto3";
+package test.v1;
+option go_package = "test/v1;testv1";
+import "jev/v1/options.proto";
+
+message BadMessage {
+  repeated string tags = 1 [(jev.v1.field).instructions = "tag list"];
+}
+`
+
+	gen := compileProto(t, src)
+	file := gen.FilesByPath["test.proto"]
+	require.NotNil(t, file)
+	require.Len(t, file.Messages, 1)
+
+	_, err := parser.ProcessMessage(file.Messages[0])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "repeated fields are not yet supported")
+}
+
+func TestSanity_UnsupportedMapField(t *testing.T) {
+	src := `syntax = "proto3";
+package test.v1;
+option go_package = "test/v1;testv1";
+import "jev/v1/options.proto";
+
+message BadMessage {
+  map<string, string> metadata = 1 [(jev.v1.field).instructions = "meta map"];
+}
+`
+
+	gen := compileProto(t, src)
+	file := gen.FilesByPath["test.proto"]
+	require.NotNil(t, file)
+	require.Len(t, file.Messages, 1)
+
+	_, err := parser.ProcessMessage(file.Messages[0])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "map fields are not yet supported")
+}
+
+func TestSanity_UnsupportedNestedMessage(t *testing.T) {
+	src := `syntax = "proto3";
+package test.v1;
+option go_package = "test/v1;testv1";
+import "jev/v1/options.proto";
+
+message SubMessage {
+  string id = 1;
+}
+
+message BadMessage {
+  SubMessage sub = 1 [(jev.v1.field).instructions = "sub msg"];
+}
+`
+
+	gen := compileProto(t, src)
+	file := gen.FilesByPath["test.proto"]
+	require.NotNil(t, file)
+	require.Len(t, file.Messages, 2)
+
+	_, err := parser.ProcessMessage(file.Messages[1])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "nested message fields are not yet supported")
+}
+
+func TestSanity_UnsupportedBytesField(t *testing.T) {
+	src := `syntax = "proto3";
+package test.v1;
+option go_package = "test/v1;testv1";
+import "jev/v1/options.proto";
+
+message BadMessage {
+  bytes payload = 1 [(jev.v1.field).instructions = "raw bytes"];
+}
+`
+
+	gen := compileProto(t, src)
+	file := gen.FilesByPath["test.proto"]
+	require.NotNil(t, file)
+	require.Len(t, file.Messages, 1)
+
+	_, err := parser.ProcessMessage(file.Messages[0])
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bytes fields are not yet supported")
 }

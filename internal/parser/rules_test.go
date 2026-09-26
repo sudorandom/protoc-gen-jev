@@ -4,106 +4,83 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/sudorandom/protoc-gen-jev/internal/model"
 	jevv1 "github.com/sudorandom/protoc-gen-jev/pkg/jev/v1"
 )
 
-func TestResolveIntCriteria(t *testing.T) {
+func TestResolveScoreLevels(t *testing.T) {
 	tests := []struct {
-		name     string
-		rule     *jevv1.ScoreRules
-		expected []string
+		name             string
+		rule             *jevv1.ScoreRules
+		expectedLevels   []model.ScoreLevel
+		expectedCriteria []string
+		expectErr        bool
 	}{
 		{
-			name:     "default fallback without score rules",
-			rule:     nil,
-			expected: []string{"1", "2", "3", "4", "5"},
+			name: "explicit levels",
+			rule: &jevv1.ScoreRules{
+				Levels: []*jevv1.ScoreLevel{
+					{Value: 1, Description: "Minor; can wait"},
+					{Value: 2, Description: "Low urgency"},
+					{Value: 3, Description: "Needs attention soon"},
+					{Value: 4, Description: "Urgent"},
+					{Value: 5, Description: "Immediate action required"},
+				},
+			},
+			expectedLevels: []model.ScoreLevel{
+				{Value: 1, Description: "Minor; can wait"},
+				{Value: 2, Description: "Low urgency"},
+				{Value: 3, Description: "Needs attention soon"},
+				{Value: 4, Description: "Urgent"},
+				{Value: 5, Description: "Immediate action required"},
+			},
+			expectedCriteria: []string{
+				"Minor; can wait",
+				"Low urgency",
+				"Needs attention soon",
+				"Urgent",
+				"Immediate action required",
+			},
 		},
 		{
-			name: "small range exact sequence (1..5)",
+			name: "explicit levels with empty descriptions fallback to formatted float",
 			rule: &jevv1.ScoreRules{
-				Min: 1,
-				Max: 5,
+				Levels: []*jevv1.ScoreLevel{
+					{Value: 0.2},
+					{Value: 0.5},
+					{Value: 0.8},
+				},
 			},
-			expected: []string{"1", "2", "3", "4", "5"},
+			expectedLevels: []model.ScoreLevel{
+				{Value: 0.2, Description: ""},
+				{Value: 0.5, Description: ""},
+				{Value: 0.8, Description: ""},
+			},
+			expectedCriteria: []string{"0.2", "0.5", "0.8"},
 		},
 		{
-			name: "explicit discrete scale takes priority",
+			name: "too few levels error",
 			rule: &jevv1.ScoreRules{
-				Scale: []float32{10, 20, 50, 100},
-				Min:   1,
-				Max:   100,
+				Levels: []*jevv1.ScoreLevel{
+					{Value: 1, Description: "Solo"},
+				},
 			},
-			expected: []string{"10", "20", "50", "100"},
-		},
-		{
-			name: "large integer range 5-tier interpolated rubric (0..1000)",
-			rule: &jevv1.ScoreRules{
-				Min: 0,
-				Max: 1000,
-			},
-			expected: []string{"0", "250", "500", "750", "1000"},
-		},
-		{
-			name: "custom Jev score min/max override (10..50)",
-			rule: &jevv1.ScoreRules{
-				Min: 10,
-				Max: 50,
-			},
-			expected: []string{"10", "20", "30", "40", "50"},
+			expectErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveIntCriteria(nil, tt.rule)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
-func TestResolveFloatCriteria(t *testing.T) {
-	tests := []struct {
-		name     string
-		rule     *jevv1.ScoreRules
-		expected []string
-	}{
-		{
-			name:     "default fallback continuous rubric (0.0..1.0)",
-			rule:     nil,
-			expected: []string{"0.0", "0.25", "0.5", "0.75", "1.0"},
-		},
-		{
-			name: "continuous range interpolation (-40.0..60.0)",
-			rule: &jevv1.ScoreRules{
-				Min: -40.0,
-				Max: 60.0,
-			},
-			expected: []string{"-40.0", "-15.0", "10.0", "35.0", "60.0"},
-		},
-		{
-			name: "discrete float scale takes priority",
-			rule: &jevv1.ScoreRules{
-				Scale: []float32{0.2, 0.5, 0.8},
-				Min:   0.0,
-				Max:   1.0,
-			},
-			expected: []string{"0.2", "0.5", "0.8"},
-		},
-		{
-			name: "custom Jev score min/max bounds (0.0..50.0)",
-			rule: &jevv1.ScoreRules{
-				Min: 0.0,
-				Max: 50.0,
-			},
-			expected: []string{"0.0", "12.5", "25.0", "37.5", "50.0"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := resolveFloatCriteria(nil, tt.rule)
-			assert.Equal(t, tt.expected, got)
+			levels, criteria, err := resolveScoreLevels(nil, tt.rule)
+			if tt.expectErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedLevels, levels)
+				assert.Equal(t, tt.expectedCriteria, criteria)
+			}
 		})
 	}
 }
@@ -125,9 +102,9 @@ func TestResolveStringCriteria(t *testing.T) {
 				Choices: []string{"PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII"},
 			},
 			expected: map[string]any{
-				"PUBLIC":                nil,
-				"INTERNAL_CONFIDENTIAL": nil,
-				"RESTRICTED_PII":        nil,
+				"PUBLIC":                "",
+				"INTERNAL_CONFIDENTIAL": "",
+				"RESTRICTED_PII":        "",
 			},
 		},
 		{
@@ -139,8 +116,8 @@ func TestResolveStringCriteria(t *testing.T) {
 				},
 			},
 			expected: map[string]any{
-				"APPROVE": nil,
-				"REJECT":  nil,
+				"APPROVE": "Request approved",
+				"REJECT":  "Request rejected",
 			},
 		},
 	}

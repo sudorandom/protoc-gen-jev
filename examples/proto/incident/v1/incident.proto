@@ -53,16 +53,32 @@ message TriageResponse {
     }
   ];
 
-  // 4. Bounded integer range (<= 10) -> Jev Score with exact sequence rubric [1, 2, 3, 4, 5]
+  // 4. Bounded integer range -> Jev Score with explicit rubric levels
   int32 urgency_rating = 6 [
     (jev.v1.field).instructions = "How urgently does this issue need to be resolved?",
-    (jev.v1.field).score = { min: 1, max: 5 }
+    (jev.v1.field).score = {
+      levels: [
+        { value: 1, description: "Minor; can wait" },
+        { value: 2, description: "Low urgency" },
+        { value: 3, description: "Needs attention soon" },
+        { value: 4, description: "Urgent" },
+        { value: 5, description: "Immediate action required" }
+      ]
+    }
   ];
 
-  // 5. Continuous numeric scale -> Jev Score with 5-tier interpolated rubric [0.0, 25.0, 50.0, 75.0, 100.0]
+  // 5. Continuous numeric scale -> Jev Score with explicit rubric tiers
   float blast_radius_percentage = 7 [
     (jev.v1.field).instructions = "Estimated percentage of production infrastructure impacted",
-    (jev.v1.field).score = { min: 0.0, max: 100.0 }
+    (jev.v1.field).score = {
+      levels: [
+        { value: 0.0, description: "No impact" },
+        { value: 25.0, description: "Limited localized impact" },
+        { value: 50.0, description: "Moderate impact; several services affected" },
+        { value: 75.0, description: "Substantial impact; major degradation" },
+        { value: 100.0, description: "Catastrophic outage; total failure" }
+      ]
+    }
   ];
 
   // 6. String with discrete allowed choices -> Jev Choice question

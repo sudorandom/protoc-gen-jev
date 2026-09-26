@@ -4,16 +4,19 @@
 import json
 import os
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
 # Add examples/gen/jev to module path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "gen" / "jev"))
 
-from incident.v1.incident_jev import (
-    IncidentTriageServiceClient,
+from google.protobuf.json_format import MessageToDict, MessageToJson
+from incident.v1.incident_pb2 import (
     TriageRequest,
     TriageResponse,
+    PriorityLevel,
+)
+from incident.v1.incident_jev import (
+    IncidentTriageServiceClient,
 )
 from typesafe_sdk import TypeSafeClient
 
@@ -58,7 +61,7 @@ def main():
     print("\n2. Evaluating Single Incident State...")
     decision = client.triage(req)
     print("✔ Decision received:")
-    print(json.dumps(asdict(decision), indent=2))
+    print(MessageToJson(decision, indent=2))
 
     # 3. Batch evaluation
     print("\n3. Batch Evaluating 3 Incident States...")
@@ -86,9 +89,12 @@ def main():
     batch_decisions = client.batch_triage(batch_reqs)
     print(f"✔ Successfully evaluated {len(batch_decisions)} batch items.")
     for i, d in enumerate(batch_decisions, start=1):
+        which_target = d.WhichOneof("routing_target") or "none"
+        target_val = getattr(d, which_target, "") if which_target != "none" else ""
+        priority_name = PriorityLevel.Name(d.priority)
         print(
-            f"  - Item [{i}]: RoutingTarget={d.routing_target}, "
-            f"Paging={d.requires_immediate_paging}, Priority={d.priority}, "
+            f"  - Item [{i}]: RoutingTarget={which_target}:{target_val}, "
+            f"Paging={d.requires_immediate_paging}, Priority={priority_name}, "
             f"Urgency={d.urgency_rating}, BlastRadius={d.blast_radius_percentage}%"
         )
 

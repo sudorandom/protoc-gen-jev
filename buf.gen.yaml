@@ -1,7 +1,16 @@
 version: v2
 inputs:
   - directory: testdata/proto
+  - directory: proto
 plugins:
+  - local: protoc-gen-go
+    out: gen/jev
+  - local: protoc-gen-es
+    out: gen/jev
+    opt:
+      - target=ts
+  - remote: buf.build/protocolbuffers/python:v29.3
+    out: gen/jev
   - local: ./protoc-gen-jev
     out: gen/jev
     opt:

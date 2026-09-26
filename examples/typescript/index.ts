@@ -1,9 +1,15 @@
 import { TypeSafeClient } from "@typesafe-ai/sdk";
+import { create, toJson } from "@bufbuild/protobuf";
 import {
   IncidentTriageServiceClient,
-  TriageRequest,
-  TriageResponse,
 } from "../gen/jev/incident/v1/incident_jev.js";
+import {
+  TriageRequest,
+  TriageRequestSchema,
+  TriageResponse,
+  TriageResponseSchema,
+  PriorityLevel,
+} from "../gen/jev/incident/v1/incident_pb.js";
 
 async function main() {
   console.log("==================================================");
@@ -42,47 +48,47 @@ async function main() {
   }
 
   // 2. Evaluate single input state
-  const req: TriageRequest = {
-    incident_id: "INC-8891",
+  const req: TriageRequest = create(TriageRequestSchema, {
+    incidentId: "INC-8891",
     title: "Database connection pool exhausted",
     description: "API latency increased to 4500ms and 500 errors spike to 12%",
-    raw_logs: "Connection refused on port 5432 after 100 pool max connections",
-  };
+    rawLogs: "Connection refused on port 5432 after 100 pool max connections",
+  }) as TriageRequest;
 
   console.log("\n2. Evaluating Single Incident State...");
   const decision: TriageResponse = await client.triage(req);
   console.log("✔ Decision received:");
-  console.log(JSON.stringify(decision, null, 2));
+  console.log(JSON.stringify(toJson(TriageResponseSchema, decision), null, 2));
 
   // 3. Batch evaluation
   console.log("\n3. Batch Evaluating 3 Incident States...");
   const batchReqs: TriageRequest[] = [
-    {
-      incident_id: "INC-8892",
+    create(TriageRequestSchema, {
+      incidentId: "INC-8892",
       title: "Ingress 502 bad gateway spikes across region us-east-1",
       description: "Edge proxy reports connection reset by peer from upstream cluster",
-      raw_logs: "HTTP 502 Bad Gateway - upstream connect error or disconnect/reset before headers",
-    },
-    {
-      incident_id: "INC-8893",
+      rawLogs: "HTTP 502 Bad Gateway - upstream connect error or disconnect/reset before headers",
+    }) as TriageRequest,
+    create(TriageRequestSchema, {
+      incidentId: "INC-8893",
       title: "Low-priority deprecation warning logged in analytics service",
       description: "Client library using deprecated v1 query endpoint; scheduled for removal in Q3",
-      raw_logs: "WARN [analytics-worker] Endpoint /v1/query is deprecated, migrate to /v2/query",
-    },
-    {
-      incident_id: "INC-8894",
+      rawLogs: "WARN [analytics-worker] Endpoint /v1/query is deprecated, migrate to /v2/query",
+    }) as TriageRequest,
+    create(TriageRequestSchema, {
+      incidentId: "INC-8894",
       title: "Routine memory compaction completed without customer impact",
       description: "Background compaction cycle reclaimed 4.2GB memory; latency within SLO",
-      raw_logs: "INFO [compactor] Compaction cycle finished in 45s, 0 errors, 4200MB reclaimed",
-    },
+      rawLogs: "INFO [compactor] Compaction cycle finished in 45s, 0 errors, 4200MB reclaimed",
+    }) as TriageRequest,
   ];
 
   const batchDecisions: TriageResponse[] = await client.batchTriage(batchReqs);
   console.log(`✔ Successfully evaluated ${batchDecisions.length} batch items.`);
   batchDecisions.forEach((d, i) => {
     console.log(
-      `  - Item [${i + 1}]: RoutingTarget=${d.routing_target}, ` +
-        `Paging=${d.requiresImmediatePaging}, Priority=${d.priority}, ` +
+      `  - Item [${i + 1}]: RoutingTarget=${d.routingTarget.case}:${d.routingTarget.value}, ` +
+        `Paging=${d.requiresImmediatePaging}, Priority=${PriorityLevel[d.priority]}, ` +
         `Urgency=${d.urgencyRating}, BlastRadius=${d.blastRadiusPercentage}%`,
     );
   });

@@ -84,12 +84,12 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 	require.NotNil(t, decision)
 
 	// Validate typed responses from FauxRPC OpenAPI stubs
-	assert.Equal(t, "oncall_engineer", decision.RoutingTarget)
-	assert.True(t, decision.RequiresImmediatePaging)
-	assert.Equal(t, "PRIORITY_LEVEL_HIGH", decision.Priority)
-	assert.InDelta(t, 4.0, decision.UrgencyRating, 0.001)
-	assert.InDelta(t, 45.0, decision.BlastRadiusPercentage, 0.001)
-	assert.Equal(t, "INTERNAL_CONFIDENTIAL", decision.ComplianceClassification)
+	assert.Equal(t, "oncall_engineer", decision.GetOncallEngineer())
+	assert.True(t, decision.GetRequiresImmediatePaging())
+	assert.Equal(t, incidentv1.PriorityLevel_PRIORITY_LEVEL_HIGH, decision.GetPriority())
+	assert.Equal(t, int32(4), decision.GetUrgencyRating())
+	assert.InDelta(t, 45.0, float64(decision.GetBlastRadiusPercentage()), 0.001)
+	assert.Equal(t, "INTERNAL_CONFIDENTIAL", decision.GetComplianceClassification())
 
 	// 3. Test BatchTriage against FauxRPC
 	batchReqs := []*incidentv1.TriageRequest{
@@ -103,9 +103,9 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 	require.Len(t, decisions, 3)
 
 	for i, d := range decisions {
-		assert.Equal(t, "oncall_engineer", d.RoutingTarget, "batch item %d", i)
-		assert.True(t, d.RequiresImmediatePaging, "batch item %d", i)
-		assert.Equal(t, "PRIORITY_LEVEL_HIGH", d.Priority, "batch item %d", i)
+		assert.Equal(t, "oncall_engineer", d.GetOncallEngineer(), "batch item %d", i)
+		assert.True(t, d.GetRequiresImmediatePaging(), "batch item %d", i)
+		assert.Equal(t, incidentv1.PriorityLevel_PRIORITY_LEVEL_HIGH, d.GetPriority(), "batch item %d", i)
 	}
 
 	// 4. Failing test case: Calling an invalid endpoint returns error status

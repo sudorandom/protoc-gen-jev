@@ -1,6 +1,17 @@
-# Example buf.gen.yaml demonstrating code generation with protoc-gen-jev.
+# Example buf.gen.yaml demonstrating code generation with protobuf-es, protoc-gen-go, protobuf-py, and protoc-gen-jev.
 version: v2
+inputs:
+  - directory: examples/proto
+  - directory: proto
 plugins:
+  - local: protoc-gen-go
+    out: examples/gen/jev
+  - local: protoc-gen-es
+    out: examples/gen/jev
+    opt:
+      - target=ts
+  - remote: buf.build/protocolbuffers/python:v29.3
+    out: examples/gen/jev
   - local: ./protoc-gen-jev
     out: examples/gen/jev
     opt:

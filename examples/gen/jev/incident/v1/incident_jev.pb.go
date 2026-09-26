@@ -7,27 +7,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+)
+
+var (
+	_ = math.Inf
+	_ = proto.Marshal
 )
 
 const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
+const DefaultJevModel = "jev-latest"
 
-// TriageResponseJevDecisions holds structured decisions returned by Jev for TriageResponse.
-type TriageResponseJevDecisions struct {
-	RoutingTarget            string  `json:"routing_target"`
-	RequiresImmediatePaging  bool    `json:"requiresImmediatePaging"`
-	Priority                 string  `json:"priority"`
-	UrgencyRating            float64 `json:"urgencyRating"`
-	BlastRadiusPercentage    float64 `json:"blastRadiusPercentage"`
-	ComplianceClassification string  `json:"complianceClassification"`
+func interpolateScore(s float64, levels []float64) float64 {
+	if len(levels) == 0 {
+		return s
+	}
+	if s <= 0 {
+		return levels[0]
+	}
+	n := len(levels)
+	if s >= float64(n-1) {
+		return levels[n-1]
+	}
+	idx := int(s)
+	frac := s - float64(idx)
+	return levels[idx] + frac*(levels[idx+1]-levels[idx])
 }
 
 // TriageResponseJevClient is a typed client for evaluating TriageResponse decisions via Jev.
 type TriageResponseJevClient struct {
 	APIKey     string
 	Endpoint   string
+	Model      string
 	HTTPClient *http.Client
 }
 
@@ -38,7 +55,8 @@ func NewTriageResponseJevClient(apiKey string) *TriageResponseJevClient {
 	return &TriageResponseJevClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Model:      DefaultJevModel,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -47,7 +65,7 @@ func (c *TriageResponseJevClient) BuildQuestions() map[string]any {
 		"routing_target": map[string]any{
 			"type":         "choice",
 			"instructions": "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.",
-			"criteria":     map[string]any{"automated_runbook": nil, "incident_commander": nil, "oncall_engineer": nil},
+			"criteria":     map[string]any{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"},
 		},
 		"requiresImmediatePaging": map[string]any{
 			"type":         "noul",
@@ -56,29 +74,42 @@ func (c *TriageResponseJevClient) BuildQuestions() map[string]any {
 		"priority": map[string]any{
 			"type":         "choice",
 			"instructions": "Assess the operational severity and customer blast radius",
-			"criteria":     map[string]any{"PRIORITY_LEVEL_CRITICAL": nil, "PRIORITY_LEVEL_HIGH": nil, "PRIORITY_LEVEL_LOW": nil, "PRIORITY_LEVEL_MEDIUM": nil},
+			"criteria":     map[string]any{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"},
 		},
 		"urgencyRating": map[string]any{
 			"type":         "score",
 			"instructions": "How urgently does this issue need to be resolved?",
-			"criteria":     []string{"1", "2", "3", "4", "5"},
+			"criteria":     []string{"Minor; can wait", "Low urgency", "Needs attention soon", "Urgent", "Immediate action required"},
 		},
 		"blastRadiusPercentage": map[string]any{
 			"type":         "score",
 			"instructions": "Estimated percentage of production infrastructure impacted",
-			"criteria":     []string{"0.0", "25.0", "50.0", "75.0", "100.0"},
+			"criteria":     []string{"No impact", "Limited localized impact", "Moderate impact; several services affected", "Substantial impact; major degradation", "Catastrophic outage; total failure"},
 		},
 		"complianceClassification": map[string]any{
 			"type":         "choice",
 			"instructions": "Categorize any sensitive or regulated data exposed in the incident report",
-			"criteria":     map[string]any{"INTERNAL_CONFIDENTIAL": nil, "PCI_DSS": nil, "PUBLIC": nil, "RESTRICTED_PII": nil},
+			"criteria":     map[string]any{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""},
 		},
 	}
 }
 
-func (c *TriageResponseJevClient) Evaluate(ctx context.Context, state any) (*TriageResponseJevDecisions, error) {
+func (c *TriageResponseJevClient) Evaluate(ctx context.Context, state any) (*TriageResponse, error) {
+	var stateJSON any
+	if pm, ok := state.(proto.Message); ok {
+		b, err := protojson.Marshal(pm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
+		}
+		if err := json.Unmarshal(b, &stateJSON); err != nil {
+			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
+		}
+	} else {
+		stateJSON = state
+	}
 	payload := map[string]any{
-		"state":     state,
+		"state":     stateJSON,
+		"model":     c.Model,
 		"questions": c.BuildQuestions(),
 	}
 	bodyBytes, err := json.Marshal(payload)
@@ -110,7 +141,8 @@ func (c *TriageResponseJevClient) Evaluate(ctx context.Context, state any) (*Tri
 			Choice string `json:"choice"`
 		} `json:"choices"`
 		Nouls map[string]struct {
-			Result bool `json:"result"`
+			Result bool    `json:"result"`
+			Noul   float64 `json:"noul"`
 		} `json:"nouls"`
 		Scores map[string]struct {
 			Score float64 `json:"score"`
@@ -119,48 +151,89 @@ func (c *TriageResponseJevClient) Evaluate(ctx context.Context, state any) (*Tri
 	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
-	decisions := &TriageResponseJevDecisions{}
+	decisions := &TriageResponse{}
+	var choice_routing_target string
 	if item, ok := rawResp.Answers["routing_target"]; ok && item.Choice != "" {
-		decisions.RoutingTarget = item.Choice
+		choice_routing_target = item.Choice
 	} else if item, ok := rawResp.Choices["routing_target"]; ok {
-		decisions.RoutingTarget = item.Choice
+		choice_routing_target = item.Choice
+	}
+	if choice_routing_target != "" {
+		switch choice_routing_target {
+		case "automated_runbook":
+			decisions.RoutingTarget = &TriageResponse_AutomatedRunbook{AutomatedRunbook: choice_routing_target}
+		case "incident_commander":
+			decisions.RoutingTarget = &TriageResponse_IncidentCommander{IncidentCommander: choice_routing_target}
+		case "oncall_engineer":
+			decisions.RoutingTarget = &TriageResponse_OncallEngineer{OncallEngineer: choice_routing_target}
+		}
 	}
 	if item, ok := rawResp.Answers["requiresImmediatePaging"]; ok && item.Noul != nil {
 		switch v := item.Noul.(type) {
 		case bool:
 			decisions.RequiresImmediatePaging = v
 		case float64:
-			decisions.RequiresImmediatePaging = v >= 0.5
+			decisions.RequiresImmediatePaging = v >= 0.8500000238418579
 		}
 	} else if item, ok := rawResp.Nouls["requiresImmediatePaging"]; ok {
-		decisions.RequiresImmediatePaging = item.Result
+		if item.Noul != 0 {
+			decisions.RequiresImmediatePaging = item.Noul >= 0.8500000238418579
+		} else {
+			decisions.RequiresImmediatePaging = item.Result
+		}
 	}
+	var choice_priority string
 	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
-		decisions.Priority = item.Choice
+		choice_priority = item.Choice
 	} else if item, ok := rawResp.Choices["priority"]; ok {
-		decisions.Priority = item.Choice
+		choice_priority = item.Choice
 	}
-	if item, ok := rawResp.Answers["urgencyRating"]; ok && item.Score != 0 {
-		decisions.UrgencyRating = item.Score
+	if choice_priority != "" {
+		if val, ok := PriorityLevel_value[choice_priority]; ok {
+			decisions.Priority = PriorityLevel(val)
+		}
+	}
+	var scorePos_urgencyRating float64
+	var hasScore_urgencyRating bool
+	if item, ok := rawResp.Answers["urgencyRating"]; ok {
+		scorePos_urgencyRating = item.Score
+		hasScore_urgencyRating = true
 	} else if item, ok := rawResp.Scores["urgencyRating"]; ok {
-		decisions.UrgencyRating = item.Score
+		scorePos_urgencyRating = item.Score
+		hasScore_urgencyRating = true
 	}
-	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok && item.Score != 0 {
-		decisions.BlastRadiusPercentage = item.Score
+	if hasScore_urgencyRating {
+		sVal := interpolateScore(scorePos_urgencyRating, []float64{1, 2, 3, 4, 5})
+		decisions.UrgencyRating = int32(math.Round(sVal))
+	}
+	var scorePos_blastRadiusPercentage float64
+	var hasScore_blastRadiusPercentage bool
+	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok {
+		scorePos_blastRadiusPercentage = item.Score
+		hasScore_blastRadiusPercentage = true
 	} else if item, ok := rawResp.Scores["blastRadiusPercentage"]; ok {
-		decisions.BlastRadiusPercentage = item.Score
+		scorePos_blastRadiusPercentage = item.Score
+		hasScore_blastRadiusPercentage = true
 	}
+	if hasScore_blastRadiusPercentage {
+		sVal := interpolateScore(scorePos_blastRadiusPercentage, []float64{0, 25, 50, 75, 100})
+		decisions.BlastRadiusPercentage = float32(sVal)
+	}
+	var choice_complianceClassification string
 	if item, ok := rawResp.Answers["complianceClassification"]; ok && item.Choice != "" {
-		decisions.ComplianceClassification = item.Choice
+		choice_complianceClassification = item.Choice
 	} else if item, ok := rawResp.Choices["complianceClassification"]; ok {
-		decisions.ComplianceClassification = item.Choice
+		choice_complianceClassification = item.Choice
+	}
+	if choice_complianceClassification != "" {
+		decisions.ComplianceClassification = choice_complianceClassification
 	}
 	return decisions, nil
 }
 
 // BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *TriageResponseJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*TriageResponseJevDecisions, error) {
-	results := make([]*TriageResponseJevDecisions, len(states))
+func (c *TriageResponseJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*TriageResponse, error) {
+	results := make([]*TriageResponse, len(states))
 	for i, s := range states {
 		res, err := c.Evaluate(ctx, s)
 		if err != nil {
@@ -171,28 +244,11 @@ func (c *TriageResponseJevClient) BatchEvaluate(ctx context.Context, states []an
 	return results, nil
 }
 
-// TriageRequest represents the input request for Triage.
-type TriageRequest struct {
-	IncidentId  string `json:"incident_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	RawLogs     string `json:"raw_logs"`
-}
-
-// TriageResponse holds structured decisions returned by Jev for Triage.
-type TriageResponse struct {
-	RoutingTarget            string  `json:"routing_target"`
-	RequiresImmediatePaging  bool    `json:"requiresImmediatePaging"`
-	Priority                 string  `json:"priority"`
-	UrgencyRating            float64 `json:"urgencyRating"`
-	BlastRadiusPercentage    float64 `json:"blastRadiusPercentage"`
-	ComplianceClassification string  `json:"complianceClassification"`
-}
-
 // IncidentTriageServiceClient is a typed client for evaluating IncidentTriageService decisions via Jev.
 type IncidentTriageServiceClient struct {
 	APIKey     string
 	Endpoint   string
+	Model      string
 	HTTPClient *http.Client
 }
 
@@ -203,7 +259,8 @@ func NewIncidentTriageServiceClient(apiKey string) *IncidentTriageServiceClient 
 	return &IncidentTriageServiceClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		Model:      DefaultJevModel,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -212,7 +269,7 @@ func (c *IncidentTriageServiceClient) BuildTriageQuestions() map[string]any {
 		"routing_target": map[string]any{
 			"type":         "choice",
 			"instructions": "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.",
-			"criteria":     map[string]any{"automated_runbook": nil, "incident_commander": nil, "oncall_engineer": nil},
+			"criteria":     map[string]any{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"},
 		},
 		"requiresImmediatePaging": map[string]any{
 			"type":         "noul",
@@ -221,29 +278,38 @@ func (c *IncidentTriageServiceClient) BuildTriageQuestions() map[string]any {
 		"priority": map[string]any{
 			"type":         "choice",
 			"instructions": "Assess the operational severity and customer blast radius",
-			"criteria":     map[string]any{"PRIORITY_LEVEL_CRITICAL": nil, "PRIORITY_LEVEL_HIGH": nil, "PRIORITY_LEVEL_LOW": nil, "PRIORITY_LEVEL_MEDIUM": nil},
+			"criteria":     map[string]any{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"},
 		},
 		"urgencyRating": map[string]any{
 			"type":         "score",
 			"instructions": "How urgently does this issue need to be resolved?",
-			"criteria":     []string{"1", "2", "3", "4", "5"},
+			"criteria":     []string{"Minor; can wait", "Low urgency", "Needs attention soon", "Urgent", "Immediate action required"},
 		},
 		"blastRadiusPercentage": map[string]any{
 			"type":         "score",
 			"instructions": "Estimated percentage of production infrastructure impacted",
-			"criteria":     []string{"0.0", "25.0", "50.0", "75.0", "100.0"},
+			"criteria":     []string{"No impact", "Limited localized impact", "Moderate impact; several services affected", "Substantial impact; major degradation", "Catastrophic outage; total failure"},
 		},
 		"complianceClassification": map[string]any{
 			"type":         "choice",
 			"instructions": "Categorize any sensitive or regulated data exposed in the incident report",
-			"criteria":     map[string]any{"INTERNAL_CONFIDENTIAL": nil, "PCI_DSS": nil, "PUBLIC": nil, "RESTRICTED_PII": nil},
+			"criteria":     map[string]any{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""},
 		},
 	}
 }
 
 func (c *IncidentTriageServiceClient) Triage(ctx context.Context, req *TriageRequest) (*TriageResponse, error) {
+	stateBytes, err := protojson.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+	var stateJSON any
+	if err := json.Unmarshal(stateBytes, &stateJSON); err != nil {
+		return nil, fmt.Errorf("failed to parse state json: %w", err)
+	}
 	payload := map[string]any{
-		"state":     req,
+		"state":     stateJSON,
+		"model":     c.Model,
 		"questions": c.BuildTriageQuestions(),
 	}
 	bodyBytes, err := json.Marshal(payload)
@@ -275,7 +341,8 @@ func (c *IncidentTriageServiceClient) Triage(ctx context.Context, req *TriageReq
 			Choice string `json:"choice"`
 		} `json:"choices"`
 		Nouls map[string]struct {
-			Result bool `json:"result"`
+			Result bool    `json:"result"`
+			Noul   float64 `json:"noul"`
 		} `json:"nouls"`
 		Scores map[string]struct {
 			Score float64 `json:"score"`
@@ -285,40 +352,81 @@ func (c *IncidentTriageServiceClient) Triage(ctx context.Context, req *TriageReq
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &TriageResponse{}
+	var choice_routing_target string
 	if item, ok := rawResp.Answers["routing_target"]; ok && item.Choice != "" {
-		decisions.RoutingTarget = item.Choice
+		choice_routing_target = item.Choice
 	} else if item, ok := rawResp.Choices["routing_target"]; ok {
-		decisions.RoutingTarget = item.Choice
+		choice_routing_target = item.Choice
+	}
+	if choice_routing_target != "" {
+		switch choice_routing_target {
+		case "automated_runbook":
+			decisions.RoutingTarget = &TriageResponse_AutomatedRunbook{AutomatedRunbook: choice_routing_target}
+		case "incident_commander":
+			decisions.RoutingTarget = &TriageResponse_IncidentCommander{IncidentCommander: choice_routing_target}
+		case "oncall_engineer":
+			decisions.RoutingTarget = &TriageResponse_OncallEngineer{OncallEngineer: choice_routing_target}
+		}
 	}
 	if item, ok := rawResp.Answers["requiresImmediatePaging"]; ok && item.Noul != nil {
 		switch v := item.Noul.(type) {
 		case bool:
 			decisions.RequiresImmediatePaging = v
 		case float64:
-			decisions.RequiresImmediatePaging = v >= 0.5
+			decisions.RequiresImmediatePaging = v >= 0.8500000238418579
 		}
 	} else if item, ok := rawResp.Nouls["requiresImmediatePaging"]; ok {
-		decisions.RequiresImmediatePaging = item.Result
+		if item.Noul != 0 {
+			decisions.RequiresImmediatePaging = item.Noul >= 0.8500000238418579
+		} else {
+			decisions.RequiresImmediatePaging = item.Result
+		}
 	}
+	var choice_priority string
 	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
-		decisions.Priority = item.Choice
+		choice_priority = item.Choice
 	} else if item, ok := rawResp.Choices["priority"]; ok {
-		decisions.Priority = item.Choice
+		choice_priority = item.Choice
 	}
-	if item, ok := rawResp.Answers["urgencyRating"]; ok && item.Score != 0 {
-		decisions.UrgencyRating = item.Score
+	if choice_priority != "" {
+		if val, ok := PriorityLevel_value[choice_priority]; ok {
+			decisions.Priority = PriorityLevel(val)
+		}
+	}
+	var scorePos_urgencyRating float64
+	var hasScore_urgencyRating bool
+	if item, ok := rawResp.Answers["urgencyRating"]; ok {
+		scorePos_urgencyRating = item.Score
+		hasScore_urgencyRating = true
 	} else if item, ok := rawResp.Scores["urgencyRating"]; ok {
-		decisions.UrgencyRating = item.Score
+		scorePos_urgencyRating = item.Score
+		hasScore_urgencyRating = true
 	}
-	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok && item.Score != 0 {
-		decisions.BlastRadiusPercentage = item.Score
+	if hasScore_urgencyRating {
+		sVal := interpolateScore(scorePos_urgencyRating, []float64{1, 2, 3, 4, 5})
+		decisions.UrgencyRating = int32(math.Round(sVal))
+	}
+	var scorePos_blastRadiusPercentage float64
+	var hasScore_blastRadiusPercentage bool
+	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok {
+		scorePos_blastRadiusPercentage = item.Score
+		hasScore_blastRadiusPercentage = true
 	} else if item, ok := rawResp.Scores["blastRadiusPercentage"]; ok {
-		decisions.BlastRadiusPercentage = item.Score
+		scorePos_blastRadiusPercentage = item.Score
+		hasScore_blastRadiusPercentage = true
 	}
+	if hasScore_blastRadiusPercentage {
+		sVal := interpolateScore(scorePos_blastRadiusPercentage, []float64{0, 25, 50, 75, 100})
+		decisions.BlastRadiusPercentage = float32(sVal)
+	}
+	var choice_complianceClassification string
 	if item, ok := rawResp.Answers["complianceClassification"]; ok && item.Choice != "" {
-		decisions.ComplianceClassification = item.Choice
+		choice_complianceClassification = item.Choice
 	} else if item, ok := rawResp.Choices["complianceClassification"]; ok {
-		decisions.ComplianceClassification = item.Choice
+		choice_complianceClassification = item.Choice
+	}
+	if choice_complianceClassification != "" {
+		decisions.ComplianceClassification = choice_complianceClassification
 	}
 	return decisions, nil
 }
