@@ -104,7 +104,9 @@ release *args="release --clean":
 # Format all Go code
 format:
 	@echo "Formatting Go code..."
+	golangci-lint run --fix ./...
 	go fmt ./...
+
 
 # ------------------------------------------------------------------------------
 # Cleanup

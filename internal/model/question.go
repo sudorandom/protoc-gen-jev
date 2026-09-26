@@ -13,12 +13,12 @@ const (
 
 // Question represents a single Jev decision question mapped from a Protobuf field.
 type Question struct {
-	Type         QuestionType   `json:"type"`
-	Instructions string         `json:"instructions"`
-	Criteria     any            `json:"criteria,omitempty"`
-	ProtoField   string         `json:"proto_field"`
-	JSONField    string         `json:"json_field"`
-	GoField      string         `json:"go_field"`
+	Type         QuestionType `json:"type"`
+	Instructions string       `json:"instructions"`
+	Criteria     any          `json:"criteria,omitempty"`
+	ProtoField   string       `json:"proto_field"`
+	JSONField    string       `json:"json_field"`
+	GoField      string       `json:"go_field"`
 }
 
 // MessageSpec represents all Jev questions extracted from a single Protobuf message.

@@ -133,9 +133,9 @@ func TestGeneratedClient_Evaluate(t *testing.T) {
 
 	assert.Equal(t, "email", decisions.DeliveryMethod)
 	assert.Equal(t, "MODE_FAST", decisions.ExecutionMode)
-	assert.Equal(t, 5.0, decisions.RatingSmall)
+	assert.InDelta(t, 5.0, decisions.RatingSmall, 0.001)
 	assert.Equal(t, "TOP_SECRET", decisions.SecurityClearance)
-	assert.Equal(t, 40.0, decisions.CustomBoundedScore)
+	assert.InDelta(t, 40.0, decisions.CustomBoundedScore, 0.001)
 }
 
 func TestGeneratedClient_BatchEvaluate(t *testing.T) {
@@ -171,7 +171,7 @@ func TestGeneratedClient_BatchEvaluate(t *testing.T) {
 
 	for _, dec := range results {
 		assert.Equal(t, "sms", dec.DeliveryMethod)
-		assert.Equal(t, 4.0, dec.RatingSmall)
+		assert.InDelta(t, 4.0, dec.RatingSmall, 0.001)
 	}
 }
 
@@ -232,4 +232,3 @@ func TestGeneratedClient_Evaluate_NetworkError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Jev request failed")
 }
-

@@ -21,8 +21,6 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 	absSchemaDir, err := filepath.Abs("../testdata/openapi")
 	require.NoError(t, err)
 
-
-
 	// Spin up FauxRPC container with Testcontainers
 	req := testcontainers.ContainerRequest{
 		Image:        "docker.io/sudorandom/fauxrpc:v0.29.1",
