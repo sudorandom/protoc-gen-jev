@@ -39,14 +39,7 @@ async function main() {
     // Check if Docker/Testcontainers is available
     const absSchemaDir = path.resolve(__dirname, "../../testdata/openapi");
     try {
-      if (!process.env.DOCKER_HOST) {
-        const home = process.env.HOME || "";
-        const colimaSock = path.join(home, ".colima/default/docker.sock");
-        process.env.DOCKER_HOST = `unix://${colimaSock}`;
-      }
-      if (!process.env.TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE) {
-        process.env.TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE = "/var/run/docker.sock";
-      }
+
 
       console.log("\n[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...");
       container = await new GenericContainer("docker.io/sudorandom/fauxrpc:v0.29.1")

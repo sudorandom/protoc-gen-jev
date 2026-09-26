@@ -29,17 +29,7 @@ func main() {
 	if apiKey == "" {
 		ctx := context.Background()
 
-		// Configure Docker host fallback for macOS / Colima if not set
-		if os.Getenv("DOCKER_HOST") == "" {
-			home, _ := os.UserHomeDir()
-			colimaSocket := filepath.Join(home, ".colima", "default", "docker.sock")
-			if _, err := os.Stat(colimaSocket); err == nil {
-				_ = os.Setenv("DOCKER_HOST", "unix://"+colimaSocket)
-			}
-		}
-		if os.Getenv("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE") == "" {
-			_ = os.Setenv("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
-		}
+
 
 		absSchemaDir, err := filepath.Abs("testdata/openapi")
 		if err == nil {

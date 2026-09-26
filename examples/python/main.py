@@ -61,20 +61,6 @@ def main():
         # Try starting FauxRPC Testcontainer with Jev OpenAPI spec
         abs_openapi = str((Path(__file__).resolve().parents[2] / "testdata" / "openapi").resolve())
         try:
-            if "DOCKER_HOST" not in os.environ:
-                home = os.environ.get("HOME", "")
-                colima_sock = Path(home) / ".colima/default/docker.sock"
-                if colima_sock.exists():
-                    os.environ["DOCKER_HOST"] = f"unix://{colima_sock}"
-            if "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE" not in os.environ:
-                os.environ["TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE"] = "/var/run/docker.sock"
-
-            from testcontainers.core.config import testcontainers_config
-            # Guard against invalid tc.host pointing to non-existent local socket
-            tc_host = testcontainers_config.tc_properties.get("tc.host")
-            if tc_host and tc_host.startswith("unix://") and not Path(tc_host[7:]).exists():
-                testcontainers_config.tc_properties.pop("tc.host", None)
-
             from testcontainers.core.container import DockerContainer
 
             print("\n[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...")

@@ -1,5 +1,6 @@
 # Justfile for protoc-gen-jev
 set shell := ["bash", "-c"]
+export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE := env_var_or_default("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
 
 # Default recipe: lint and run all tests
 default: lint test
