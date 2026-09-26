@@ -109,4 +109,11 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 		assert.True(t, d.RequiresImmediatePaging, "batch item %d", i)
 		assert.Equal(t, "PRIORITY_LEVEL_HIGH", d.Priority, "batch item %d", i)
 	}
+
+	// 4. Failing test case: Calling an invalid endpoint returns error status
+	invalidClient := incidentv1.NewIncidentTriageJevClient("mock-api-key")
+	invalidClient.Endpoint = fmt.Sprintf("%s/v1/nonexistent", endpoint)
+	_, err = invalidClient.Evaluate(ctx, state)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "404")
 }

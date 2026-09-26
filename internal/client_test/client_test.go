@@ -174,3 +174,62 @@ func TestGeneratedClient_BatchEvaluate(t *testing.T) {
 		assert.Equal(t, 4.0, dec.RatingSmall)
 	}
 }
+
+func TestGeneratedClient_Evaluate_HTTPError400(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error": "invalid questions payload: missing type"}`))
+	}))
+	defer ts.Close()
+
+	client := rulesv1.NewRuleTestRecordJevClient("dummy-key")
+	client.Endpoint = ts.URL
+	client.HTTPClient = ts.Client()
+
+	_, err := client.Evaluate(context.Background(), map[string]any{"text": "Sample request"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "400")
+	assert.Contains(t, err.Error(), "invalid questions payload")
+}
+
+func TestGeneratedClient_Evaluate_HTTPError500(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`internal server error`))
+	}))
+	defer ts.Close()
+
+	client := rulesv1.NewRuleTestRecordJevClient("dummy-key")
+	client.Endpoint = ts.URL
+	client.HTTPClient = ts.Client()
+
+	_, err := client.Evaluate(context.Background(), map[string]any{"text": "Sample request"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
+func TestGeneratedClient_Evaluate_MalformedJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not a valid json`))
+	}))
+	defer ts.Close()
+
+	client := rulesv1.NewRuleTestRecordJevClient("dummy-key")
+	client.Endpoint = ts.URL
+	client.HTTPClient = ts.Client()
+
+	_, err := client.Evaluate(context.Background(), map[string]any{"text": "Sample request"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to decode Jev response")
+}
+
+func TestGeneratedClient_Evaluate_NetworkError(t *testing.T) {
+	client := rulesv1.NewRuleTestRecordJevClient("dummy-key")
+	client.Endpoint = "http://127.0.0.1:1" // unreachable port
+
+	_, err := client.Evaluate(context.Background(), map[string]any{"text": "Sample request"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Jev request failed")
+}
+
