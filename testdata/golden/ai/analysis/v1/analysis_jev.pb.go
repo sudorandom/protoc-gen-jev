@@ -2,543 +2,170 @@
 package analysisv1
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"math"
 	"net/http"
 	"os"
 	"time"
-
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	"github.com/sudorandom/protoc-gen-jev/pkg/jev"
 )
 
-var (
-	_ = math.Inf
-	_ = proto.Marshal
-)
-
-const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
-const DefaultJevModel = "jev-latest"
-
-func interpolateScore(s float64, levels []float64) float64 {
-	if len(levels) == 0 {
-		return s
-	}
-	if s <= 0 {
-		return levels[0]
-	}
-	n := len(levels)
-	if s >= float64(n-1) {
-		return levels[n-1]
-	}
-	idx := int(s)
-	frac := s - float64(idx)
-	return levels[idx] + frac*(levels[idx+1]-levels[idx])
-}
-
-// EntityJevClient is a typed client for evaluating Entity decisions via Jev.
-type EntityJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type EntityJevClient struct{ jev.Client }
 
 func NewEntityJevClient(apiKey string) *EntityJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &EntityJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &EntityJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *EntityJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"relevance": map[string]any{
-			"type":         "score",
-			"instructions": "Relevance score from 0.0 to 1.0.",
-			"criteria":     []string{"Not relevant", "Moderately relevant", "Highly relevant"},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "relevance", Type: "score", Instructions: "Relevance score from 0.0 to 1.0.", Field: "relevance", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "Not relevant"}, {Value: 0.5, Description: "Moderately relevant"}, {Value: 1, Description: "Highly relevant"}}, Oneof: map[string]string{}}})
 }
-
-func (c *EntityJevClient) Evaluate(ctx context.Context, state any) (*Entity, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *EntityJevClient) Evaluate(ctx context.Context, req any) (*Entity, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *EntityJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*Entity], error) {
+	out := &Entity{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "relevance", Type: "score", Instructions: "Relevance score from 0.0 to 1.0.", Field: "relevance", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "Not relevant"}, {Value: 0.5, Description: "Moderately relevant"}, {Value: 1, Description: "Highly relevant"}}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &Entity{}
-	var scorePos_relevance float64
-	var hasScore_relevance bool
-	if item, ok := rawResp.Answers["relevance"]; ok {
-		scorePos_relevance = item.Score
-		hasScore_relevance = true
-	} else if item, ok := rawResp.Scores["relevance"]; ok {
-		scorePos_relevance = item.Score
-		hasScore_relevance = true
-	}
-	if hasScore_relevance {
-		sVal := interpolateScore(scorePos_relevance, []float64{0, 0.5, 1})
-		decisions.Relevance = float32(sVal)
-	}
-	return decisions, nil
+	return &jev.Evaluation[*Entity]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *EntityJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*Entity, error) {
-	results := make([]*Entity, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *EntityJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*Entity, error) {
+	results := make([]*Entity, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }
 
-// NotificationJevClient is a typed client for evaluating Notification decisions via Jev.
-type NotificationJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type NotificationJevClient struct{ jev.Client }
 
 func NewNotificationJevClient(apiKey string) *NotificationJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &NotificationJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &NotificationJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *NotificationJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"channel": map[string]any{
-			"type":         "choice",
-			"instructions": "Select channel variant",
-			"criteria":     map[string]any{"email": "email", "slack_channel": "slack_channel", "webhook_url": "webhook_url"},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "channel", Type: "choice", Instructions: "Select channel variant", Field: "channel", Kind: "oneof", Threshold: 0, Choices: map[string]string{"email": "email", "slack_channel": "slack_channel", "webhook_url": "webhook_url"}, Levels: []jev.Level{}, Oneof: map[string]string{"email": "string", "slack_channel": "string", "webhook_url": "string"}}})
 }
-
-func (c *NotificationJevClient) Evaluate(ctx context.Context, state any) (*Notification, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *NotificationJevClient) Evaluate(ctx context.Context, req any) (*Notification, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *NotificationJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*Notification], error) {
+	out := &Notification{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "channel", Type: "choice", Instructions: "Select channel variant", Field: "channel", Kind: "oneof", Threshold: 0, Choices: map[string]string{"email": "email", "slack_channel": "slack_channel", "webhook_url": "webhook_url"}, Levels: []jev.Level{}, Oneof: map[string]string{"email": "string", "slack_channel": "string", "webhook_url": "string"}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &Notification{}
-	var choice_channel string
-	if item, ok := rawResp.Answers["channel"]; ok && item.Choice != "" {
-		choice_channel = item.Choice
-	} else if item, ok := rawResp.Choices["channel"]; ok {
-		choice_channel = item.Choice
-	}
-	if choice_channel != "" {
-		switch choice_channel {
-		case "email":
-			decisions.Channel = &Notification_Email{Email: choice_channel}
-		case "slack_channel":
-			decisions.Channel = &Notification_SlackChannel{SlackChannel: choice_channel}
-		case "webhook_url":
-			decisions.Channel = &Notification_WebhookUrl{WebhookUrl: choice_channel}
-		}
-	}
-	return decisions, nil
+	return &jev.Evaluation[*Notification]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *NotificationJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*Notification, error) {
-	results := make([]*Notification, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *NotificationJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*Notification, error) {
+	results := make([]*Notification, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }
 
-// ActionItemJevClient is a typed client for evaluating ActionItem decisions via Jev.
-type ActionItemJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type ActionItemJevClient struct{ jev.Client }
 
 func NewActionItemJevClient(apiKey string) *ActionItemJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &ActionItemJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &ActionItemJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *ActionItemJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"priority": map[string]any{
-			"type":         "choice",
-			"instructions": "Urgency and priority level of the task.",
-			"criteria":     map[string]any{"PRIORITY_HIGH": "", "PRIORITY_LOW": "", "PRIORITY_MEDIUM": "", "PRIORITY_URGENT": ""},
-		},
-		"requiresImmediateAction": map[string]any{
-			"type":         "noul",
-			"instructions": "Whether this task requires immediate escalation or intervention.",
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "priority", Type: "choice", Instructions: "Urgency and priority level of the task.", Field: "priority", Kind: "enum", Threshold: 0, Choices: map[string]string{"PRIORITY_HIGH": "", "PRIORITY_LOW": "", "PRIORITY_MEDIUM": "", "PRIORITY_URGENT": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "requiresImmediateAction", Type: "noul", Instructions: "Whether this task requires immediate escalation or intervention.", Field: "requires_immediate_action", Kind: "bool", Threshold: 0.5, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}})
 }
-
-func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionItem, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *ActionItemJevClient) Evaluate(ctx context.Context, req any) (*ActionItem, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *ActionItemJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*ActionItem], error) {
+	out := &ActionItem{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "priority", Type: "choice", Instructions: "Urgency and priority level of the task.", Field: "priority", Kind: "enum", Threshold: 0, Choices: map[string]string{"PRIORITY_HIGH": "", "PRIORITY_LOW": "", "PRIORITY_MEDIUM": "", "PRIORITY_URGENT": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "requiresImmediateAction", Type: "noul", Instructions: "Whether this task requires immediate escalation or intervention.", Field: "requires_immediate_action", Kind: "bool", Threshold: 0.5, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &ActionItem{}
-	var choice_priority string
-	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
-		choice_priority = item.Choice
-	} else if item, ok := rawResp.Choices["priority"]; ok {
-		choice_priority = item.Choice
-	}
-	if choice_priority != "" {
-		if val, ok := Priority_value[choice_priority]; ok {
-			decisions.Priority = Priority(val)
-		}
-	}
-	if item, ok := rawResp.Answers["requiresImmediateAction"]; ok && item.Noul != nil {
-		switch v := item.Noul.(type) {
-		case bool:
-			decisions.RequiresImmediateAction = v
-		case float64:
-			decisions.RequiresImmediateAction = v >= 0.5
-		}
-	} else if item, ok := rawResp.Nouls["requiresImmediateAction"]; ok {
-		if item.Noul != 0 {
-			decisions.RequiresImmediateAction = item.Noul >= 0.5
-		} else {
-			decisions.RequiresImmediateAction = item.Result
-		}
-	}
-	return decisions, nil
+	return &jev.Evaluation[*ActionItem]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *ActionItemJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*ActionItem, error) {
-	results := make([]*ActionItem, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *ActionItemJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*ActionItem, error) {
+	results := make([]*ActionItem, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }
 
-// AnalysisReportJevClient is a typed client for evaluating AnalysisReport decisions via Jev.
-type AnalysisReportJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type AnalysisReportJevClient struct{ jev.Client }
 
 func NewAnalysisReportJevClient(apiKey string) *AnalysisReportJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &AnalysisReportJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &AnalysisReportJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *AnalysisReportJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"sentiment": map[string]any{
-			"type":         "choice",
-			"instructions": "Overall sentiment detected in the text.",
-			"criteria":     map[string]any{"SENTIMENT_NEGATIVE": "", "SENTIMENT_NEUTRAL": "", "SENTIMENT_POSITIVE": ""},
-		},
-		"confidenceScore": map[string]any{
-			"type":         "score",
-			"instructions": "Confidence score of the overall analysis between 0.0 and 1.0.",
-			"criteria":     []string{"Low confidence", "Medium confidence", "High confidence"},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "sentiment", Type: "choice", Instructions: "Overall sentiment detected in the text.", Field: "sentiment", Kind: "enum", Threshold: 0, Choices: map[string]string{"SENTIMENT_NEGATIVE": "", "SENTIMENT_NEUTRAL": "", "SENTIMENT_POSITIVE": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "confidenceScore", Type: "score", Instructions: "Confidence score of the overall analysis between 0.0 and 1.0.", Field: "confidence_score", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "Low confidence"}, {Value: 0.5, Description: "Medium confidence"}, {Value: 1, Description: "High confidence"}}, Oneof: map[string]string{}}})
 }
-
-func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, state any) (*AnalysisReport, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, req any) (*AnalysisReport, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *AnalysisReportJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*AnalysisReport], error) {
+	out := &AnalysisReport{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "sentiment", Type: "choice", Instructions: "Overall sentiment detected in the text.", Field: "sentiment", Kind: "enum", Threshold: 0, Choices: map[string]string{"SENTIMENT_NEGATIVE": "", "SENTIMENT_NEUTRAL": "", "SENTIMENT_POSITIVE": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "confidenceScore", Type: "score", Instructions: "Confidence score of the overall analysis between 0.0 and 1.0.", Field: "confidence_score", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "Low confidence"}, {Value: 0.5, Description: "Medium confidence"}, {Value: 1, Description: "High confidence"}}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &AnalysisReport{}
-	var choice_sentiment string
-	if item, ok := rawResp.Answers["sentiment"]; ok && item.Choice != "" {
-		choice_sentiment = item.Choice
-	} else if item, ok := rawResp.Choices["sentiment"]; ok {
-		choice_sentiment = item.Choice
-	}
-	if choice_sentiment != "" {
-		if val, ok := Sentiment_value[choice_sentiment]; ok {
-			decisions.Sentiment = Sentiment(val)
-		}
-	}
-	var scorePos_confidenceScore float64
-	var hasScore_confidenceScore bool
-	if item, ok := rawResp.Answers["confidenceScore"]; ok {
-		scorePos_confidenceScore = item.Score
-		hasScore_confidenceScore = true
-	} else if item, ok := rawResp.Scores["confidenceScore"]; ok {
-		scorePos_confidenceScore = item.Score
-		hasScore_confidenceScore = true
-	}
-	if hasScore_confidenceScore {
-		sVal := interpolateScore(scorePos_confidenceScore, []float64{0, 0.5, 1})
-		decisions.ConfidenceScore = float32(sVal)
-	}
-	return decisions, nil
+	return &jev.Evaluation[*AnalysisReport]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *AnalysisReportJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*AnalysisReport, error) {
-	results := make([]*AnalysisReport, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *AnalysisReportJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*AnalysisReport, error) {
+	results := make([]*AnalysisReport, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }

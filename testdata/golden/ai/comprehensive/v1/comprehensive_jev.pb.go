@@ -2,413 +2,90 @@
 package comprehensivev1
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"math"
 	"net/http"
 	"os"
 	"time"
-
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	"github.com/sudorandom/protoc-gen-jev/pkg/jev"
 )
 
-var (
-	_ = math.Inf
-	_ = proto.Marshal
-)
-
-const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
-const DefaultJevModel = "jev-latest"
-
-func interpolateScore(s float64, levels []float64) float64 {
-	if len(levels) == 0 {
-		return s
-	}
-	if s <= 0 {
-		return levels[0]
-	}
-	n := len(levels)
-	if s >= float64(n-1) {
-		return levels[n-1]
-	}
-	idx := int(s)
-	frac := s - float64(idx)
-	return levels[idx] + frac*(levels[idx+1]-levels[idx])
-}
-
-// MetadataJevClient is a typed client for evaluating Metadata decisions via Jev.
-type MetadataJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type MetadataJevClient struct{ jev.Client }
 
 func NewMetadataJevClient(apiKey string) *MetadataJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &MetadataJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &MetadataJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *MetadataJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"version": map[string]any{
-			"type":         "score",
-			"instructions": "Evaluate version",
-			"criteria":     []string{"1", "2", "3", "4", "5"},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "version", Type: "score", Instructions: "Evaluate version", Field: "version", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Very low extent or intensity"}, {Value: 2, Description: "Low extent or intensity"}, {Value: 3, Description: "Moderate extent or intensity"}, {Value: 4, Description: "High extent or intensity"}, {Value: 5, Description: "Very high extent or intensity"}}, Oneof: map[string]string{}}})
 }
-
-func (c *MetadataJevClient) Evaluate(ctx context.Context, state any) (*Metadata, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *MetadataJevClient) Evaluate(ctx context.Context, req any) (*Metadata, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *MetadataJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*Metadata], error) {
+	out := &Metadata{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "version", Type: "score", Instructions: "Evaluate version", Field: "version", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Very low extent or intensity"}, {Value: 2, Description: "Low extent or intensity"}, {Value: 3, Description: "Moderate extent or intensity"}, {Value: 4, Description: "High extent or intensity"}, {Value: 5, Description: "Very high extent or intensity"}}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &Metadata{}
-	var scorePos_version float64
-	var hasScore_version bool
-	if item, ok := rawResp.Answers["version"]; ok {
-		scorePos_version = item.Score
-		hasScore_version = true
-	} else if item, ok := rawResp.Scores["version"]; ok {
-		scorePos_version = item.Score
-		hasScore_version = true
-	}
-	if hasScore_version {
-		sVal := interpolateScore(scorePos_version, []float64{1, 2, 3, 4, 5})
-		decisions.Version = int32(math.Round(sVal))
-	}
-	return decisions, nil
+	return &jev.Evaluation[*Metadata]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *MetadataJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*Metadata, error) {
-	results := make([]*Metadata, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *MetadataJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*Metadata, error) {
+	results := make([]*Metadata, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }
 
-// ComprehensiveRecordJevClient is a typed client for evaluating ComprehensiveRecord decisions via Jev.
-type ComprehensiveRecordJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type ComprehensiveRecordJevClient struct{ jev.Client }
 
 func NewComprehensiveRecordJevClient(apiKey string) *ComprehensiveRecordJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &ComprehensiveRecordJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &ComprehensiveRecordJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *ComprehensiveRecordJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"scoreInt": map[string]any{
-			"type":         "score",
-			"instructions": "--- Numeric validation variants ---",
-			"criteria":     []string{"Minimum score", "Average score", "Maximum score"},
-		},
-		"bigCount": map[string]any{
-			"type":         "score",
-			"instructions": "Evaluate bigCount",
-			"criteria":     []string{"1", "2", "3", "4", "5"},
-		},
-		"ratio": map[string]any{
-			"type":         "score",
-			"instructions": "Evaluate ratio",
-			"criteria":     []string{"Zero ratio", "Half ratio", "Full ratio"},
-		},
-		"latitude": map[string]any{
-			"type":         "score",
-			"instructions": "Evaluate latitude",
-			"criteria":     []string{"South Pole", "Equator", "North Pole"},
-		},
-		"isEnabled": map[string]any{
-			"type":         "noul",
-			"instructions": "--- Boolean & Enum ---",
-		},
-		"status": map[string]any{
-			"type":         "choice",
-			"instructions": "Evaluate status",
-			"criteria":     map[string]any{"STATUS_ACTIVE": "", "STATUS_ARCHIVED": "", "STATUS_PAUSED": ""},
-		},
-		"payload": map[string]any{
-			"type":         "choice",
-			"instructions": "--- Oneof ---",
-			"criteria":     map[string]any{"binary_payload": "binary_payload", "text_payload": "text_payload"},
-		},
-		"churnRisk": map[string]any{
-			"type":         "noul",
-			"instructions": "Custom Jev instruction: assess customer cancellation intent",
-		},
-		"accountTier": map[string]any{
-			"type":         "choice",
-			"instructions": "Discrete string choices via Jev options",
-			"criteria":     map[string]any{"TIER_ENTERPRISE": "", "TIER_PREMIUM": "", "TIER_STANDARD": ""},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "scoreInt", Type: "score", Instructions: "--- Numeric validation variants ---", Field: "score_int", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Minimum score"}, {Value: 50, Description: "Average score"}, {Value: 100, Description: "Maximum score"}}, Oneof: map[string]string{}}, {Name: "bigCount", Type: "score", Instructions: "Evaluate bigCount", Field: "big_count", Kind: "int64", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Very low extent or intensity"}, {Value: 2, Description: "Low extent or intensity"}, {Value: 3, Description: "Moderate extent or intensity"}, {Value: 4, Description: "High extent or intensity"}, {Value: 5, Description: "Very high extent or intensity"}}, Oneof: map[string]string{}}, {Name: "ratio", Type: "score", Instructions: "Evaluate ratio", Field: "ratio", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "Zero ratio"}, {Value: 0.5, Description: "Half ratio"}, {Value: 1, Description: "Full ratio"}}, Oneof: map[string]string{}}, {Name: "latitude", Type: "score", Instructions: "Evaluate latitude", Field: "latitude", Kind: "float64", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: -90, Description: "South Pole"}, {Value: 0, Description: "Equator"}, {Value: 90, Description: "North Pole"}}, Oneof: map[string]string{}}, {Name: "isEnabled", Type: "noul", Instructions: "--- Boolean & Enum ---", Field: "is_enabled", Kind: "bool", Threshold: 0.5, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "status", Type: "choice", Instructions: "Evaluate status", Field: "status", Kind: "enum", Threshold: 0, Choices: map[string]string{"STATUS_ACTIVE": "", "STATUS_ARCHIVED": "", "STATUS_PAUSED": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "payload", Type: "choice", Instructions: "--- Oneof ---", Field: "payload", Kind: "oneof", Threshold: 0, Choices: map[string]string{"binary_payload": "binary_payload", "text_payload": "text_payload"}, Levels: []jev.Level{}, Oneof: map[string]string{"binary_payload": "bytes", "text_payload": "string"}}, {Name: "churnRisk", Type: "noul", Instructions: "Custom Jev instruction: assess customer cancellation intent", Field: "churn_risk", Kind: "bool", Threshold: 0.5, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "accountTier", Type: "choice", Instructions: "Discrete string choices via Jev options", Field: "account_tier", Kind: "string", Threshold: 0, Choices: map[string]string{"TIER_ENTERPRISE": "", "TIER_PREMIUM": "", "TIER_STANDARD": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}})
 }
-
-func (c *ComprehensiveRecordJevClient) Evaluate(ctx context.Context, state any) (*ComprehensiveRecord, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *ComprehensiveRecordJevClient) Evaluate(ctx context.Context, req any) (*ComprehensiveRecord, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *ComprehensiveRecordJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*ComprehensiveRecord], error) {
+	out := &ComprehensiveRecord{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "scoreInt", Type: "score", Instructions: "--- Numeric validation variants ---", Field: "score_int", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Minimum score"}, {Value: 50, Description: "Average score"}, {Value: 100, Description: "Maximum score"}}, Oneof: map[string]string{}}, {Name: "bigCount", Type: "score", Instructions: "Evaluate bigCount", Field: "big_count", Kind: "int64", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Very low extent or intensity"}, {Value: 2, Description: "Low extent or intensity"}, {Value: 3, Description: "Moderate extent or intensity"}, {Value: 4, Description: "High extent or intensity"}, {Value: 5, Description: "Very high extent or intensity"}}, Oneof: map[string]string{}}, {Name: "ratio", Type: "score", Instructions: "Evaluate ratio", Field: "ratio", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "Zero ratio"}, {Value: 0.5, Description: "Half ratio"}, {Value: 1, Description: "Full ratio"}}, Oneof: map[string]string{}}, {Name: "latitude", Type: "score", Instructions: "Evaluate latitude", Field: "latitude", Kind: "float64", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: -90, Description: "South Pole"}, {Value: 0, Description: "Equator"}, {Value: 90, Description: "North Pole"}}, Oneof: map[string]string{}}, {Name: "isEnabled", Type: "noul", Instructions: "--- Boolean & Enum ---", Field: "is_enabled", Kind: "bool", Threshold: 0.5, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "status", Type: "choice", Instructions: "Evaluate status", Field: "status", Kind: "enum", Threshold: 0, Choices: map[string]string{"STATUS_ACTIVE": "", "STATUS_ARCHIVED": "", "STATUS_PAUSED": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "payload", Type: "choice", Instructions: "--- Oneof ---", Field: "payload", Kind: "oneof", Threshold: 0, Choices: map[string]string{"binary_payload": "binary_payload", "text_payload": "text_payload"}, Levels: []jev.Level{}, Oneof: map[string]string{"binary_payload": "bytes", "text_payload": "string"}}, {Name: "churnRisk", Type: "noul", Instructions: "Custom Jev instruction: assess customer cancellation intent", Field: "churn_risk", Kind: "bool", Threshold: 0.5, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "accountTier", Type: "choice", Instructions: "Discrete string choices via Jev options", Field: "account_tier", Kind: "string", Threshold: 0, Choices: map[string]string{"TIER_ENTERPRISE": "", "TIER_PREMIUM": "", "TIER_STANDARD": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &ComprehensiveRecord{}
-	var scorePos_scoreInt float64
-	var hasScore_scoreInt bool
-	if item, ok := rawResp.Answers["scoreInt"]; ok {
-		scorePos_scoreInt = item.Score
-		hasScore_scoreInt = true
-	} else if item, ok := rawResp.Scores["scoreInt"]; ok {
-		scorePos_scoreInt = item.Score
-		hasScore_scoreInt = true
-	}
-	if hasScore_scoreInt {
-		sVal := interpolateScore(scorePos_scoreInt, []float64{1, 50, 100})
-		decisions.ScoreInt = int32(math.Round(sVal))
-	}
-	var scorePos_bigCount float64
-	var hasScore_bigCount bool
-	if item, ok := rawResp.Answers["bigCount"]; ok {
-		scorePos_bigCount = item.Score
-		hasScore_bigCount = true
-	} else if item, ok := rawResp.Scores["bigCount"]; ok {
-		scorePos_bigCount = item.Score
-		hasScore_bigCount = true
-	}
-	if hasScore_bigCount {
-		sVal := interpolateScore(scorePos_bigCount, []float64{1, 2, 3, 4, 5})
-		decisions.BigCount = int64(math.Round(sVal))
-	}
-	var scorePos_ratio float64
-	var hasScore_ratio bool
-	if item, ok := rawResp.Answers["ratio"]; ok {
-		scorePos_ratio = item.Score
-		hasScore_ratio = true
-	} else if item, ok := rawResp.Scores["ratio"]; ok {
-		scorePos_ratio = item.Score
-		hasScore_ratio = true
-	}
-	if hasScore_ratio {
-		sVal := interpolateScore(scorePos_ratio, []float64{0, 0.5, 1})
-		decisions.Ratio = float32(sVal)
-	}
-	var scorePos_latitude float64
-	var hasScore_latitude bool
-	if item, ok := rawResp.Answers["latitude"]; ok {
-		scorePos_latitude = item.Score
-		hasScore_latitude = true
-	} else if item, ok := rawResp.Scores["latitude"]; ok {
-		scorePos_latitude = item.Score
-		hasScore_latitude = true
-	}
-	if hasScore_latitude {
-		sVal := interpolateScore(scorePos_latitude, []float64{-90, 0, 90})
-		decisions.Latitude = sVal
-	}
-	if item, ok := rawResp.Answers["isEnabled"]; ok && item.Noul != nil {
-		switch v := item.Noul.(type) {
-		case bool:
-			decisions.IsEnabled = v
-		case float64:
-			decisions.IsEnabled = v >= 0.5
-		}
-	} else if item, ok := rawResp.Nouls["isEnabled"]; ok {
-		if item.Noul != 0 {
-			decisions.IsEnabled = item.Noul >= 0.5
-		} else {
-			decisions.IsEnabled = item.Result
-		}
-	}
-	var choice_status string
-	if item, ok := rawResp.Answers["status"]; ok && item.Choice != "" {
-		choice_status = item.Choice
-	} else if item, ok := rawResp.Choices["status"]; ok {
-		choice_status = item.Choice
-	}
-	if choice_status != "" {
-		if val, ok := Status_value[choice_status]; ok {
-			decisions.Status = Status(val)
-		}
-	}
-	var choice_payload string
-	if item, ok := rawResp.Answers["payload"]; ok && item.Choice != "" {
-		choice_payload = item.Choice
-	} else if item, ok := rawResp.Choices["payload"]; ok {
-		choice_payload = item.Choice
-	}
-	if choice_payload != "" {
-		switch choice_payload {
-		case "binary_payload":
-			decisions.Payload = &ComprehensiveRecord_BinaryPayload{BinaryPayload: []byte(choice_payload)}
-		case "text_payload":
-			decisions.Payload = &ComprehensiveRecord_TextPayload{TextPayload: choice_payload}
-		}
-	}
-	if item, ok := rawResp.Answers["churnRisk"]; ok && item.Noul != nil {
-		switch v := item.Noul.(type) {
-		case bool:
-			decisions.ChurnRisk = v
-		case float64:
-			decisions.ChurnRisk = v >= 0.5
-		}
-	} else if item, ok := rawResp.Nouls["churnRisk"]; ok {
-		if item.Noul != 0 {
-			decisions.ChurnRisk = item.Noul >= 0.5
-		} else {
-			decisions.ChurnRisk = item.Result
-		}
-	}
-	var choice_accountTier string
-	if item, ok := rawResp.Answers["accountTier"]; ok && item.Choice != "" {
-		choice_accountTier = item.Choice
-	} else if item, ok := rawResp.Choices["accountTier"]; ok {
-		choice_accountTier = item.Choice
-	}
-	if choice_accountTier != "" {
-		decisions.AccountTier = choice_accountTier
-	}
-	return decisions, nil
+	return &jev.Evaluation[*ComprehensiveRecord]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *ComprehensiveRecordJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*ComprehensiveRecord, error) {
-	results := make([]*ComprehensiveRecord, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *ComprehensiveRecordJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*ComprehensiveRecord, error) {
+	results := make([]*ComprehensiveRecord, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }

@@ -8,8 +8,8 @@ goreleaser = "latest"
 golangci-lint = "latest"
 uv = "latest"
 protobuf = "29.3"
-"npm:@bufbuild/protoc-gen-es" = "latest"
-"go:google.golang.org/protobuf/cmd/protoc-gen-go" = "latest"
+"npm:@bufbuild/protoc-gen-es" = "2.15.0"
+"go:google.golang.org/protobuf/cmd/protoc-gen-go" = "1.36.12"
 
 [env]
 TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE = "/var/run/docker.sock"

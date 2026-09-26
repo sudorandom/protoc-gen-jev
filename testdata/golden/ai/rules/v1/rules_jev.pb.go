@@ -2,346 +2,50 @@
 package rulesv1
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"math"
 	"net/http"
 	"os"
 	"time"
-
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	"github.com/sudorandom/protoc-gen-jev/pkg/jev"
 )
 
-var (
-	_ = math.Inf
-	_ = proto.Marshal
-)
-
-const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
-const DefaultJevModel = "jev-latest"
-
-func interpolateScore(s float64, levels []float64) float64 {
-	if len(levels) == 0 {
-		return s
-	}
-	if s <= 0 {
-		return levels[0]
-	}
-	n := len(levels)
-	if s >= float64(n-1) {
-		return levels[n-1]
-	}
-	idx := int(s)
-	frac := s - float64(idx)
-	return levels[idx] + frac*(levels[idx+1]-levels[idx])
-}
-
-// RuleTestRecordJevClient is a typed client for evaluating RuleTestRecord decisions via Jev.
-type RuleTestRecordJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type RuleTestRecordJevClient struct{ jev.Client }
 
 func NewRuleTestRecordJevClient(apiKey string) *RuleTestRecordJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &RuleTestRecordJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &RuleTestRecordJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *RuleTestRecordJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"delivery_method": map[string]any{
-			"type":         "choice",
-			"instructions": "1. Oneof mutual exclusion -> maps to Choice",
-			"criteria":     map[string]any{"email": "email", "push_notification": "push_notification", "sms": "sms"},
-		},
-		"executionMode": map[string]any{
-			"type":         "choice",
-			"instructions": "3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]",
-			"criteria":     map[string]any{"MODE_BALANCED": "", "MODE_FAST": ""},
-		},
-		"filteredMode": map[string]any{
-			"type":         "choice",
-			"instructions": "4. Enum restricted by not_in -> Choice omitting MODE_DEBUG",
-			"criteria":     map[string]any{"MODE_ACCURATE": "", "MODE_BALANCED": "", "MODE_FAST": ""},
-		},
-		"ratingSmall": map[string]any{
-			"type":         "score",
-			"instructions": "5. Integer with small range (<= 10) -> exact sequence [1..5]",
-			"criteria":     []string{"1", "2", "3", "4", "5"},
-		},
-		"ratingStrict": map[string]any{
-			"type":         "score",
-			"instructions": "6. Integer with explicit scale -> [1, 2, 3]",
-			"criteria":     []string{"1", "2", "3"},
-		},
-		"discreteCode": map[string]any{
-			"type":         "score",
-			"instructions": "7. Integer with discrete allowed values -> [\"10\", \"20\", \"50\", \"100\"]",
-			"criteria":     []string{"10", "20", "50", "100"},
-		},
-		"largeScale": map[string]any{
-			"type":         "score",
-			"instructions": "8. Large integer range -> 5-tier interpolated rubric [0, 250, 500, 750, 1000]",
-			"criteria":     []string{"0", "250", "500", "750", "1000"},
-		},
-		"temperature": map[string]any{
-			"type":         "score",
-			"instructions": "9. Float continuous range -> 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]",
-			"criteria":     []string{"-40.0", "-15.0", "10.0", "35.0", "60.0"},
-		},
-		"discreteRatio": map[string]any{
-			"type":         "score",
-			"instructions": "10. Float discrete values -> [\"0.2\", \"0.5\", \"0.8\"]",
-			"criteria":     []string{"0.2", "0.5", "0.8"},
-		},
-		"securityClearance": map[string]any{
-			"type":         "choice",
-			"instructions": "11. String with allowed set of values -> Choice",
-			"criteria":     map[string]any{"PUBLIC": "", "SECRET": "", "TOP_SECRET": ""},
-		},
-		"decisionFlag": map[string]any{
-			"type":         "choice",
-			"instructions": "12. String with custom Jev criteria options -> Choice",
-			"criteria":     map[string]any{"APPROVE": "Request approved", "REJECT": "Request rejected"},
-		},
-		"customBoundedScore": map[string]any{
-			"type":         "score",
-			"instructions": "13. Float with custom Jev min/max options -> [10.0, 20.0, 30.0, 40.0, 50.0]",
-			"criteria":     []string{"10.0", "20.0", "30.0", "40.0", "50.0"},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "delivery_method", Type: "choice", Instructions: "1. Oneof mutual exclusion -> maps to Choice", Field: "delivery_method", Kind: "oneof", Threshold: 0, Choices: map[string]string{"email": "email", "push_notification": "push_notification", "sms": "sms"}, Levels: []jev.Level{}, Oneof: map[string]string{"email": "string", "push_notification": "string", "sms": "string"}}, {Name: "executionMode", Type: "choice", Instructions: "3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]", Field: "execution_mode", Kind: "enum", Threshold: 0, Choices: map[string]string{"MODE_BALANCED": "", "MODE_FAST": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "filteredMode", Type: "choice", Instructions: "4. Enum restricted by not_in -> Choice omitting MODE_DEBUG", Field: "filtered_mode", Kind: "enum", Threshold: 0, Choices: map[string]string{"MODE_ACCURATE": "", "MODE_BALANCED": "", "MODE_FAST": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "ratingSmall", Type: "score", Instructions: "5. Integer with small range (<= 10) -> exact sequence [1..5]", Field: "rating_small", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "1"}, {Value: 2, Description: "2"}, {Value: 3, Description: "3"}, {Value: 4, Description: "4"}, {Value: 5, Description: "5"}}, Oneof: map[string]string{}}, {Name: "ratingStrict", Type: "score", Instructions: "6. Integer with explicit scale -> [1, 2, 3]", Field: "rating_strict", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "1"}, {Value: 2, Description: "2"}, {Value: 3, Description: "3"}}, Oneof: map[string]string{}}, {Name: "discreteCode", Type: "score", Instructions: "7. Integer with discrete allowed values -> [\"10\", \"20\", \"50\", \"100\"]", Field: "discrete_code", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 10, Description: "10"}, {Value: 20, Description: "20"}, {Value: 50, Description: "50"}, {Value: 100, Description: "100"}}, Oneof: map[string]string{}}, {Name: "largeScale", Type: "score", Instructions: "8. Large integer range -> 5-tier interpolated rubric [0, 250, 500, 750, 1000]", Field: "large_scale", Kind: "int64", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "0"}, {Value: 250, Description: "250"}, {Value: 500, Description: "500"}, {Value: 750, Description: "750"}, {Value: 1000, Description: "1000"}}, Oneof: map[string]string{}}, {Name: "temperature", Type: "score", Instructions: "9. Float continuous range -> 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]", Field: "temperature", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: -40, Description: "-40.0"}, {Value: -15, Description: "-15.0"}, {Value: 10, Description: "10.0"}, {Value: 35, Description: "35.0"}, {Value: 60, Description: "60.0"}}, Oneof: map[string]string{}}, {Name: "discreteRatio", Type: "score", Instructions: "10. Float discrete values -> [\"0.2\", \"0.5\", \"0.8\"]", Field: "discrete_ratio", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0.2, Description: "0.2"}, {Value: 0.5, Description: "0.5"}, {Value: 0.8, Description: "0.8"}}, Oneof: map[string]string{}}, {Name: "securityClearance", Type: "choice", Instructions: "11. String with allowed set of values -> Choice", Field: "security_clearance", Kind: "string", Threshold: 0, Choices: map[string]string{"PUBLIC": "", "SECRET": "", "TOP_SECRET": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "decisionFlag", Type: "choice", Instructions: "12. String with custom Jev criteria options -> Choice", Field: "decision_flag", Kind: "string", Threshold: 0, Choices: map[string]string{"APPROVE": "Request approved", "REJECT": "Request rejected"}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "customBoundedScore", Type: "score", Instructions: "13. Float with custom Jev min/max options -> [10.0, 20.0, 30.0, 40.0, 50.0]", Field: "custom_bounded_score", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 10, Description: "10.0"}, {Value: 20, Description: "20.0"}, {Value: 30, Description: "30.0"}, {Value: 40, Description: "40.0"}, {Value: 50, Description: "50.0"}}, Oneof: map[string]string{}}})
 }
-
-func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, state any) (*RuleTestRecord, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, req any) (*RuleTestRecord, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *RuleTestRecordJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*RuleTestRecord], error) {
+	out := &RuleTestRecord{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "delivery_method", Type: "choice", Instructions: "1. Oneof mutual exclusion -> maps to Choice", Field: "delivery_method", Kind: "oneof", Threshold: 0, Choices: map[string]string{"email": "email", "push_notification": "push_notification", "sms": "sms"}, Levels: []jev.Level{}, Oneof: map[string]string{"email": "string", "push_notification": "string", "sms": "string"}}, {Name: "executionMode", Type: "choice", Instructions: "3. Enum restricted by choices -> Choice with only [MODE_FAST, MODE_BALANCED]", Field: "execution_mode", Kind: "enum", Threshold: 0, Choices: map[string]string{"MODE_BALANCED": "", "MODE_FAST": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "filteredMode", Type: "choice", Instructions: "4. Enum restricted by not_in -> Choice omitting MODE_DEBUG", Field: "filtered_mode", Kind: "enum", Threshold: 0, Choices: map[string]string{"MODE_ACCURATE": "", "MODE_BALANCED": "", "MODE_FAST": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "ratingSmall", Type: "score", Instructions: "5. Integer with small range (<= 10) -> exact sequence [1..5]", Field: "rating_small", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "1"}, {Value: 2, Description: "2"}, {Value: 3, Description: "3"}, {Value: 4, Description: "4"}, {Value: 5, Description: "5"}}, Oneof: map[string]string{}}, {Name: "ratingStrict", Type: "score", Instructions: "6. Integer with explicit scale -> [1, 2, 3]", Field: "rating_strict", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "1"}, {Value: 2, Description: "2"}, {Value: 3, Description: "3"}}, Oneof: map[string]string{}}, {Name: "discreteCode", Type: "score", Instructions: "7. Integer with discrete allowed values -> [\"10\", \"20\", \"50\", \"100\"]", Field: "discrete_code", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 10, Description: "10"}, {Value: 20, Description: "20"}, {Value: 50, Description: "50"}, {Value: 100, Description: "100"}}, Oneof: map[string]string{}}, {Name: "largeScale", Type: "score", Instructions: "8. Large integer range -> 5-tier interpolated rubric [0, 250, 500, 750, 1000]", Field: "large_scale", Kind: "int64", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "0"}, {Value: 250, Description: "250"}, {Value: 500, Description: "500"}, {Value: 750, Description: "750"}, {Value: 1000, Description: "1000"}}, Oneof: map[string]string{}}, {Name: "temperature", Type: "score", Instructions: "9. Float continuous range -> 5-tier interpolated rubric [-40.0, -15.0, 10.0, 35.0, 60.0]", Field: "temperature", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: -40, Description: "-40.0"}, {Value: -15, Description: "-15.0"}, {Value: 10, Description: "10.0"}, {Value: 35, Description: "35.0"}, {Value: 60, Description: "60.0"}}, Oneof: map[string]string{}}, {Name: "discreteRatio", Type: "score", Instructions: "10. Float discrete values -> [\"0.2\", \"0.5\", \"0.8\"]", Field: "discrete_ratio", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0.2, Description: "0.2"}, {Value: 0.5, Description: "0.5"}, {Value: 0.8, Description: "0.8"}}, Oneof: map[string]string{}}, {Name: "securityClearance", Type: "choice", Instructions: "11. String with allowed set of values -> Choice", Field: "security_clearance", Kind: "string", Threshold: 0, Choices: map[string]string{"PUBLIC": "", "SECRET": "", "TOP_SECRET": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "decisionFlag", Type: "choice", Instructions: "12. String with custom Jev criteria options -> Choice", Field: "decision_flag", Kind: "string", Threshold: 0, Choices: map[string]string{"APPROVE": "Request approved", "REJECT": "Request rejected"}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "customBoundedScore", Type: "score", Instructions: "13. Float with custom Jev min/max options -> [10.0, 20.0, 30.0, 40.0, 50.0]", Field: "custom_bounded_score", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 10, Description: "10.0"}, {Value: 20, Description: "20.0"}, {Value: 30, Description: "30.0"}, {Value: 40, Description: "40.0"}, {Value: 50, Description: "50.0"}}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &RuleTestRecord{}
-	var choice_delivery_method string
-	if item, ok := rawResp.Answers["delivery_method"]; ok && item.Choice != "" {
-		choice_delivery_method = item.Choice
-	} else if item, ok := rawResp.Choices["delivery_method"]; ok {
-		choice_delivery_method = item.Choice
-	}
-	if choice_delivery_method != "" {
-		switch choice_delivery_method {
-		case "email":
-			decisions.DeliveryMethod = &RuleTestRecord_Email{Email: choice_delivery_method}
-		case "push_notification":
-			decisions.DeliveryMethod = &RuleTestRecord_PushNotification{PushNotification: choice_delivery_method}
-		case "sms":
-			decisions.DeliveryMethod = &RuleTestRecord_Sms{Sms: choice_delivery_method}
-		}
-	}
-	var choice_executionMode string
-	if item, ok := rawResp.Answers["executionMode"]; ok && item.Choice != "" {
-		choice_executionMode = item.Choice
-	} else if item, ok := rawResp.Choices["executionMode"]; ok {
-		choice_executionMode = item.Choice
-	}
-	if choice_executionMode != "" {
-		if val, ok := Mode_value[choice_executionMode]; ok {
-			decisions.ExecutionMode = Mode(val)
-		}
-	}
-	var choice_filteredMode string
-	if item, ok := rawResp.Answers["filteredMode"]; ok && item.Choice != "" {
-		choice_filteredMode = item.Choice
-	} else if item, ok := rawResp.Choices["filteredMode"]; ok {
-		choice_filteredMode = item.Choice
-	}
-	if choice_filteredMode != "" {
-		if val, ok := Mode_value[choice_filteredMode]; ok {
-			decisions.FilteredMode = Mode(val)
-		}
-	}
-	var scorePos_ratingSmall float64
-	var hasScore_ratingSmall bool
-	if item, ok := rawResp.Answers["ratingSmall"]; ok {
-		scorePos_ratingSmall = item.Score
-		hasScore_ratingSmall = true
-	} else if item, ok := rawResp.Scores["ratingSmall"]; ok {
-		scorePos_ratingSmall = item.Score
-		hasScore_ratingSmall = true
-	}
-	if hasScore_ratingSmall {
-		sVal := interpolateScore(scorePos_ratingSmall, []float64{1, 2, 3, 4, 5})
-		decisions.RatingSmall = int32(math.Round(sVal))
-	}
-	var scorePos_ratingStrict float64
-	var hasScore_ratingStrict bool
-	if item, ok := rawResp.Answers["ratingStrict"]; ok {
-		scorePos_ratingStrict = item.Score
-		hasScore_ratingStrict = true
-	} else if item, ok := rawResp.Scores["ratingStrict"]; ok {
-		scorePos_ratingStrict = item.Score
-		hasScore_ratingStrict = true
-	}
-	if hasScore_ratingStrict {
-		sVal := interpolateScore(scorePos_ratingStrict, []float64{1, 2, 3})
-		decisions.RatingStrict = int32(math.Round(sVal))
-	}
-	var scorePos_discreteCode float64
-	var hasScore_discreteCode bool
-	if item, ok := rawResp.Answers["discreteCode"]; ok {
-		scorePos_discreteCode = item.Score
-		hasScore_discreteCode = true
-	} else if item, ok := rawResp.Scores["discreteCode"]; ok {
-		scorePos_discreteCode = item.Score
-		hasScore_discreteCode = true
-	}
-	if hasScore_discreteCode {
-		sVal := interpolateScore(scorePos_discreteCode, []float64{10, 20, 50, 100})
-		decisions.DiscreteCode = int32(math.Round(sVal))
-	}
-	var scorePos_largeScale float64
-	var hasScore_largeScale bool
-	if item, ok := rawResp.Answers["largeScale"]; ok {
-		scorePos_largeScale = item.Score
-		hasScore_largeScale = true
-	} else if item, ok := rawResp.Scores["largeScale"]; ok {
-		scorePos_largeScale = item.Score
-		hasScore_largeScale = true
-	}
-	if hasScore_largeScale {
-		sVal := interpolateScore(scorePos_largeScale, []float64{0, 250, 500, 750, 1000})
-		decisions.LargeScale = int64(math.Round(sVal))
-	}
-	var scorePos_temperature float64
-	var hasScore_temperature bool
-	if item, ok := rawResp.Answers["temperature"]; ok {
-		scorePos_temperature = item.Score
-		hasScore_temperature = true
-	} else if item, ok := rawResp.Scores["temperature"]; ok {
-		scorePos_temperature = item.Score
-		hasScore_temperature = true
-	}
-	if hasScore_temperature {
-		sVal := interpolateScore(scorePos_temperature, []float64{-40, -15, 10, 35, 60})
-		decisions.Temperature = float32(sVal)
-	}
-	var scorePos_discreteRatio float64
-	var hasScore_discreteRatio bool
-	if item, ok := rawResp.Answers["discreteRatio"]; ok {
-		scorePos_discreteRatio = item.Score
-		hasScore_discreteRatio = true
-	} else if item, ok := rawResp.Scores["discreteRatio"]; ok {
-		scorePos_discreteRatio = item.Score
-		hasScore_discreteRatio = true
-	}
-	if hasScore_discreteRatio {
-		sVal := interpolateScore(scorePos_discreteRatio, []float64{0.2, 0.5, 0.8})
-		decisions.DiscreteRatio = float32(sVal)
-	}
-	var choice_securityClearance string
-	if item, ok := rawResp.Answers["securityClearance"]; ok && item.Choice != "" {
-		choice_securityClearance = item.Choice
-	} else if item, ok := rawResp.Choices["securityClearance"]; ok {
-		choice_securityClearance = item.Choice
-	}
-	if choice_securityClearance != "" {
-		decisions.SecurityClearance = choice_securityClearance
-	}
-	var choice_decisionFlag string
-	if item, ok := rawResp.Answers["decisionFlag"]; ok && item.Choice != "" {
-		choice_decisionFlag = item.Choice
-	} else if item, ok := rawResp.Choices["decisionFlag"]; ok {
-		choice_decisionFlag = item.Choice
-	}
-	if choice_decisionFlag != "" {
-		decisions.DecisionFlag = choice_decisionFlag
-	}
-	var scorePos_customBoundedScore float64
-	var hasScore_customBoundedScore bool
-	if item, ok := rawResp.Answers["customBoundedScore"]; ok {
-		scorePos_customBoundedScore = item.Score
-		hasScore_customBoundedScore = true
-	} else if item, ok := rawResp.Scores["customBoundedScore"]; ok {
-		scorePos_customBoundedScore = item.Score
-		hasScore_customBoundedScore = true
-	}
-	if hasScore_customBoundedScore {
-		sVal := interpolateScore(scorePos_customBoundedScore, []float64{10, 20, 30, 40, 50})
-		decisions.CustomBoundedScore = float32(sVal)
-	}
-	return decisions, nil
+	return &jev.Evaluation[*RuleTestRecord]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *RuleTestRecordJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*RuleTestRecord, error) {
-	results := make([]*RuleTestRecord, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *RuleTestRecordJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*RuleTestRecord, error) {
+	results := make([]*RuleTestRecord, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }

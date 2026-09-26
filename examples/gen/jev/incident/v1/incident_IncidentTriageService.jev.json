@@ -9,7 +9,7 @@
       "input_fields": [
         {
           "name": "incident_id",
-          "json_name": "incident_id",
+          "json_name": "incidentId",
           "go_name": "IncidentId",
           "type": "string"
         },
@@ -27,7 +27,7 @@
         },
         {
           "name": "raw_logs",
-          "json_name": "raw_logs",
+          "json_name": "rawLogs",
           "go_name": "RawLogs",
           "type": "string"
         }

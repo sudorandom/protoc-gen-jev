@@ -135,5 +135,5 @@ message ScoreRules {
 message NoulRules {
   // Confidence threshold [0.0 - 1.0] required for the condition to evaluate as true.
   // Default is 0.5.
-  float threshold = 1;
+  optional float threshold = 1;
 }

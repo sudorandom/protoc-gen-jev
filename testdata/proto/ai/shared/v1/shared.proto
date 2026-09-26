@@ -1,0 +1,17 @@
+syntax = "proto3";
+package ai.shared.v1;
+option go_package = "github.com/sudorandom/protoc-gen-jev/gen/jev/ai/shared/v1;sharedv1";
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_READY = 1;
+  STATUS_BLOCKED = 2;
+}
+
+message ExternalRequest {
+  string input_text = 1;
+}
+
+message ExternalResponse {
+  bool accepted = 1;
+}

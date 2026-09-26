@@ -65,6 +65,7 @@ func DeleteAll(dir string) error {
 func VerifyDir(t *testing.T, actualDir, goldenDir string) {
 	t.Helper()
 
+	actualFiles := map[string]bool{}
 	err := filepath.Walk(actualDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -80,6 +81,7 @@ func VerifyDir(t *testing.T, actualDir, goldenDir string) {
 			return err
 		}
 
+		actualFiles[rel] = true
 		goldenFile := filepath.Join(goldenDir, rel)
 		data, err := os.ReadFile(path)
 		require.NoError(t, err, "failed to read actual file %s", path)
@@ -91,4 +93,21 @@ func VerifyDir(t *testing.T, actualDir, goldenDir string) {
 	})
 
 	require.NoError(t, err, "failed walking directory %s", actualDir)
+	if !*Update && os.Getenv("UPDATE_GOLDEN") != "1" && os.Getenv("UPDATE_GOLDEN") != "true" {
+		err = filepath.Walk(goldenDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || strings.HasSuffix(path, ".pyc") || strings.Contains(path, "__pycache__") || strings.HasPrefix(filepath.Base(path), ".") {
+				return nil
+			}
+			rel, err := filepath.Rel(goldenDir, path)
+			if err != nil {
+				return err
+			}
+			assert.True(t, actualFiles[rel], "expected generated file is missing: %s", rel)
+			return nil
+		})
+		require.NoError(t, err)
+	}
 }

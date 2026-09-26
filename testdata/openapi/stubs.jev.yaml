@@ -11,35 +11,6 @@ stubs:
         usage:
           input_tokens: 42
           output_tokens: 6
-        choices:
-          routing_target:
-            choice: oncall_engineer
-            probabilities:
-              oncall_engineer: 0.88
-              automated_runbook: 0.08
-              incident_commander: 0.04
-          priority:
-            choice: PRIORITY_LEVEL_HIGH
-            probabilities:
-              PRIORITY_LEVEL_HIGH: 0.75
-              PRIORITY_LEVEL_CRITICAL: 0.20
-              PRIORITY_LEVEL_MEDIUM: 0.05
-          complianceClassification:
-            choice: INTERNAL_CONFIDENTIAL
-            probabilities:
-              INTERNAL_CONFIDENTIAL: 0.95
-              PUBLIC: 0.05
-        nouls:
-          requiresImmediatePaging:
-            result: true
-            probability: 0.92
-        scores:
-          urgencyRating:
-            score: 3.0
-            probabilities: [0.02, 0.03, 0.10, 0.75, 0.10]
-          blastRadiusPercentage:
-            score: 1.8
-            probabilities: [0.05, 0.15, 0.65, 0.10, 0.05]
         answers:
           routing_target:
             type: choice
@@ -65,27 +36,33 @@ stubs:
             score: 3.0
             confidence: 0.75
             legend:
-              "1": "Low"
-              "5": "Critical"
+              "0": "Minor; can wait"
+              "1": "Low urgency"
+              "2": "Needs attention soon"
+              "3": "Urgent"
+              "4": "Immediate action required"
             probabilities:
-              "1": 0.02
-              "2": 0.03
-              "3": 0.10
-              "4": 0.75
-              "5": 0.10
+              "0": 0.0
+              "1": 0.0
+              "2": 0.0
+              "3": 1.0
+              "4": 0.0
           blastRadiusPercentage:
             type: score
             score: 1.8
             confidence: 0.65
             legend:
-              "0.0": "0%"
-              "100.0": "100%"
+              "0": "No impact"
+              "1": "Limited localized impact"
+              "2": "Moderate impact; several services affected"
+              "3": "Substantial impact; major degradation"
+              "4": "Catastrophic outage; total failure"
             probabilities:
-              "0.0": 0.05
-              "25.0": 0.15
-              "50.0": 0.65
-              "75.0": 0.10
-              "100.0": 0.05
+              "0": 0.0
+              "1": 0.2
+              "2": 0.8
+              "3": 0.0
+              "4": 0.0
           complianceClassification:
             type: choice
             choice: INTERNAL_CONFIDENTIAL

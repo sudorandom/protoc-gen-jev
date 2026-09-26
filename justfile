@@ -39,13 +39,14 @@ install-typescript-deps:
 	npm --prefix examples/typescript ci --no-audit
 
 # Run syntax and type checks across all generated languages
-test-syntax: generate install-typescript-deps
+test-syntax: generate install-typescript-deps install-python-deps
 	@echo "Checking generated Go code..."
 	go vet ./gen/jev/...
 	@echo "Checking generated Python syntax..."
 	python -c "import py_compile, glob; [py_compile.compile(f, doraise=True) for f in glob.glob('gen/jev/**/*.py', recursive=True)]"
 	@echo "Checking generated TypeScript type signatures..."
 	npx --prefix examples/typescript tsc --noEmit -p testdata/tsconfig.json
+	.venv/bin/mypy gen/jev testdata/behavior/check.py
 	@echo "✔ Generated Go, Python, and TypeScript code verified."
 
 # Compile and verify all examples without executing them
@@ -64,9 +65,9 @@ compile-examples: generate install-typescript-deps
 	@echo "✔ All examples compiled successfully."
 
 # Run all unit tests, syntax checks, golden file verification, and compile examples
-test: generate test-syntax compile-examples
+test: generate test-syntax compile-examples test-behavior
 	@echo "Running Go tests..."
-	go test -v ./internal/... .
+	go test -v ./internal/... ./pkg/... .
 
 # Run real end-to-end examples across all languages (Go, Python, TypeScript)
 run-examples: compile-examples
@@ -181,3 +182,16 @@ clean:
 	@echo "Cleaning artifacts..."
 	rm -rf gen/ examples/gen/ protoc-gen-jev .venv/ .venv-laya/
 	@echo "✔ Clean complete."
+
+# Resolve and pin Python development dependencies (intentional dependency update).
+update-python-lock:
+    uv pip compile requirements-dev.in -o requirements-dev.txt
+
+install-python-deps:
+    @if [ ! -d ".venv" ]; then uv venv .venv; fi
+    uv pip install --python .venv/bin/python -r requirements-dev.txt
+
+# Shared malformed-response, mapping, and cross-language regression cases.
+test-behavior: generate install-typescript-deps install-python-deps
+    NODE_PATH="{{ justfile_directory() }}/examples/typescript/node_modules" node --require ./examples/typescript/node_modules/tsx/dist/cjs/index.cjs testdata/behavior/check.ts
+    .venv/bin/python testdata/behavior/check.py

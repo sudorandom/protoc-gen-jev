@@ -4,7 +4,9 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
-    "strict": false,
+    "strict": true,
+    "types": ["node"],
+    "typeRoots": ["../examples/typescript/node_modules/@types"],
     "skipLibCheck": true,
     "baseUrl": "../examples/typescript/node_modules",
     "paths": {
@@ -16,7 +18,7 @@
     }
   },
   "include": [
-    "types/@typesafe-ai/sdk/index.d.ts",
-    "../gen/jev/**/*.ts"
+    "../gen/jev/**/*.ts",
+    "behavior/check.ts"
   ]
 }

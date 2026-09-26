@@ -2,443 +2,90 @@
 package incidentv1
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"math"
 	"net/http"
 	"os"
 	"time"
-
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	"github.com/sudorandom/protoc-gen-jev/pkg/jev"
 )
 
-var (
-	_ = math.Inf
-	_ = proto.Marshal
-)
-
-const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
-const DefaultJevModel = "jev-latest"
-
-func interpolateScore(s float64, levels []float64) float64 {
-	if len(levels) == 0 {
-		return s
-	}
-	if s <= 0 {
-		return levels[0]
-	}
-	n := len(levels)
-	if s >= float64(n-1) {
-		return levels[n-1]
-	}
-	idx := int(s)
-	frac := s - float64(idx)
-	return levels[idx] + frac*(levels[idx+1]-levels[idx])
-}
-
-// TriageResponseJevClient is a typed client for evaluating TriageResponse decisions via Jev.
-type TriageResponseJevClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type TriageResponseJevClient struct{ jev.Client }
 
 func NewTriageResponseJevClient(apiKey string) *TriageResponseJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &TriageResponseJevClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &TriageResponseJevClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *TriageResponseJevClient) BuildQuestions() map[string]any {
-	return map[string]any{
-		"routing_target": map[string]any{
-			"type":         "choice",
-			"instructions": "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.",
-			"criteria":     map[string]any{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"},
-		},
-		"requiresImmediatePaging": map[string]any{
-			"type":         "noul",
-			"instructions": "Does this incident indicate active user-facing outage requiring paging?",
-		},
-		"priority": map[string]any{
-			"type":         "choice",
-			"instructions": "Assess the operational severity and customer blast radius",
-			"criteria":     map[string]any{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"},
-		},
-		"urgencyRating": map[string]any{
-			"type":         "score",
-			"instructions": "How urgently does this issue need to be resolved?",
-			"criteria":     []string{"Minor; can wait", "Low urgency", "Needs attention soon", "Urgent", "Immediate action required"},
-		},
-		"blastRadiusPercentage": map[string]any{
-			"type":         "score",
-			"instructions": "Estimated percentage of production infrastructure impacted",
-			"criteria":     []string{"No impact", "Limited localized impact", "Moderate impact; several services affected", "Substantial impact; major degradation", "Catastrophic outage; total failure"},
-		},
-		"complianceClassification": map[string]any{
-			"type":         "choice",
-			"instructions": "Categorize any sensitive or regulated data exposed in the incident report",
-			"criteria":     map[string]any{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "routing_target", Type: "choice", Instructions: "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.", Field: "routing_target", Kind: "oneof", Threshold: 0, Choices: map[string]string{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"}, Levels: []jev.Level{}, Oneof: map[string]string{"automated_runbook": "string", "incident_commander": "string", "oncall_engineer": "string"}}, {Name: "requiresImmediatePaging", Type: "noul", Instructions: "Does this incident indicate active user-facing outage requiring paging?", Field: "requires_immediate_paging", Kind: "bool", Threshold: 0.8500000238418579, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "priority", Type: "choice", Instructions: "Assess the operational severity and customer blast radius", Field: "priority", Kind: "enum", Threshold: 0, Choices: map[string]string{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "urgencyRating", Type: "score", Instructions: "How urgently does this issue need to be resolved?", Field: "urgency_rating", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Minor; can wait"}, {Value: 2, Description: "Low urgency"}, {Value: 3, Description: "Needs attention soon"}, {Value: 4, Description: "Urgent"}, {Value: 5, Description: "Immediate action required"}}, Oneof: map[string]string{}}, {Name: "blastRadiusPercentage", Type: "score", Instructions: "Estimated percentage of production infrastructure impacted", Field: "blast_radius_percentage", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "No impact"}, {Value: 25, Description: "Limited localized impact"}, {Value: 50, Description: "Moderate impact; several services affected"}, {Value: 75, Description: "Substantial impact; major degradation"}, {Value: 100, Description: "Catastrophic outage; total failure"}}, Oneof: map[string]string{}}, {Name: "complianceClassification", Type: "choice", Instructions: "Categorize any sensitive or regulated data exposed in the incident report", Field: "compliance_classification", Kind: "string", Threshold: 0, Choices: map[string]string{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}})
 }
-
-func (c *TriageResponseJevClient) Evaluate(ctx context.Context, state any) (*TriageResponse, error) {
-	var stateJSON any
-	if pm, ok := state.(proto.Message); ok {
-		b, err := protojson.Marshal(pm)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal proto state: %w", err)
-		}
-		if err := json.Unmarshal(b, &stateJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse proto json state: %w", err)
-		}
-	} else {
-		stateJSON = state
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+func (c *TriageResponseJevClient) Evaluate(ctx context.Context, req any) (*TriageResponse, error) {
+	result, err := c.EvaluateDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(req)
+	return result.Value, nil
+}
+func (c *TriageResponseJevClient) EvaluateDetailed(ctx context.Context, req any) (*jev.Evaluation[*TriageResponse], error) {
+	out := &TriageResponse{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "routing_target", Type: "choice", Instructions: "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.", Field: "routing_target", Kind: "oneof", Threshold: 0, Choices: map[string]string{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"}, Levels: []jev.Level{}, Oneof: map[string]string{"automated_runbook": "string", "incident_commander": "string", "oncall_engineer": "string"}}, {Name: "requiresImmediatePaging", Type: "noul", Instructions: "Does this incident indicate active user-facing outage requiring paging?", Field: "requires_immediate_paging", Kind: "bool", Threshold: 0.8500000238418579, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "priority", Type: "choice", Instructions: "Assess the operational severity and customer blast radius", Field: "priority", Kind: "enum", Threshold: 0, Choices: map[string]string{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "urgencyRating", Type: "score", Instructions: "How urgently does this issue need to be resolved?", Field: "urgency_rating", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Minor; can wait"}, {Value: 2, Description: "Low urgency"}, {Value: 3, Description: "Needs attention soon"}, {Value: 4, Description: "Urgent"}, {Value: 5, Description: "Immediate action required"}}, Oneof: map[string]string{}}, {Name: "blastRadiusPercentage", Type: "score", Instructions: "Estimated percentage of production infrastructure impacted", Field: "blast_radius_percentage", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "No impact"}, {Value: 25, Description: "Limited localized impact"}, {Value: 50, Description: "Moderate impact; several services affected"}, {Value: 75, Description: "Substantial impact; major degradation"}, {Value: 100, Description: "Catastrophic outage; total failure"}}, Oneof: map[string]string{}}, {Name: "complianceClassification", Type: "choice", Instructions: "Categorize any sensitive or regulated data exposed in the incident report", Field: "compliance_classification", Kind: "string", Threshold: 0, Choices: map[string]string{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &TriageResponse{}
-	var choice_routing_target string
-	if item, ok := rawResp.Answers["routing_target"]; ok && item.Choice != "" {
-		choice_routing_target = item.Choice
-	} else if item, ok := rawResp.Choices["routing_target"]; ok {
-		choice_routing_target = item.Choice
-	}
-	if choice_routing_target != "" {
-		switch choice_routing_target {
-		case "automated_runbook":
-			decisions.RoutingTarget = &TriageResponse_AutomatedRunbook{AutomatedRunbook: choice_routing_target}
-		case "incident_commander":
-			decisions.RoutingTarget = &TriageResponse_IncidentCommander{IncidentCommander: choice_routing_target}
-		case "oncall_engineer":
-			decisions.RoutingTarget = &TriageResponse_OncallEngineer{OncallEngineer: choice_routing_target}
-		}
-	}
-	if item, ok := rawResp.Answers["requiresImmediatePaging"]; ok && item.Noul != nil {
-		switch v := item.Noul.(type) {
-		case bool:
-			decisions.RequiresImmediatePaging = v
-		case float64:
-			decisions.RequiresImmediatePaging = v >= 0.8500000238418579
-		}
-	} else if item, ok := rawResp.Nouls["requiresImmediatePaging"]; ok {
-		if item.Noul != 0 {
-			decisions.RequiresImmediatePaging = item.Noul >= 0.8500000238418579
-		} else {
-			decisions.RequiresImmediatePaging = item.Result
-		}
-	}
-	var choice_priority string
-	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
-		choice_priority = item.Choice
-	} else if item, ok := rawResp.Choices["priority"]; ok {
-		choice_priority = item.Choice
-	}
-	if choice_priority != "" {
-		if val, ok := PriorityLevel_value[choice_priority]; ok {
-			decisions.Priority = PriorityLevel(val)
-		}
-	}
-	var scorePos_urgencyRating float64
-	var hasScore_urgencyRating bool
-	if item, ok := rawResp.Answers["urgencyRating"]; ok {
-		scorePos_urgencyRating = item.Score
-		hasScore_urgencyRating = true
-	} else if item, ok := rawResp.Scores["urgencyRating"]; ok {
-		scorePos_urgencyRating = item.Score
-		hasScore_urgencyRating = true
-	}
-	if hasScore_urgencyRating {
-		sVal := interpolateScore(scorePos_urgencyRating, []float64{1, 2, 3, 4, 5})
-		decisions.UrgencyRating = int32(math.Round(sVal))
-	}
-	var scorePos_blastRadiusPercentage float64
-	var hasScore_blastRadiusPercentage bool
-	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok {
-		scorePos_blastRadiusPercentage = item.Score
-		hasScore_blastRadiusPercentage = true
-	} else if item, ok := rawResp.Scores["blastRadiusPercentage"]; ok {
-		scorePos_blastRadiusPercentage = item.Score
-		hasScore_blastRadiusPercentage = true
-	}
-	if hasScore_blastRadiusPercentage {
-		sVal := interpolateScore(scorePos_blastRadiusPercentage, []float64{0, 25, 50, 75, 100})
-		decisions.BlastRadiusPercentage = float32(sVal)
-	}
-	var choice_complianceClassification string
-	if item, ok := rawResp.Answers["complianceClassification"]; ok && item.Choice != "" {
-		choice_complianceClassification = item.Choice
-	} else if item, ok := rawResp.Choices["complianceClassification"]; ok {
-		choice_complianceClassification = item.Choice
-	}
-	if choice_complianceClassification != "" {
-		decisions.ComplianceClassification = choice_complianceClassification
-	}
-	return decisions, nil
+	return &jev.Evaluation[*TriageResponse]{Value: out, Response: response}, nil
 }
 
-// BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *TriageResponseJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*TriageResponse, error) {
-	results := make([]*TriageResponse, len(states))
-	for i, s := range states {
-		res, err := c.Evaluate(ctx, s)
+// BatchEvaluate evaluates requests sequentially and stops at the first error.
+func (c *TriageResponseJevClient) BatchEvaluate(ctx context.Context, reqs []any) ([]*TriageResponse, error) {
+	results := make([]*TriageResponse, len(reqs))
+	for i, req := range reqs {
+		value, err := c.Evaluate(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }
 
-// IncidentTriageServiceClient is a typed client for evaluating IncidentTriageService decisions via Jev.
-type IncidentTriageServiceClient struct {
-	APIKey     string
-	Endpoint   string
-	Model      string
-	HTTPClient *http.Client
-}
+type IncidentTriageServiceClient struct{ jev.Client }
 
 func NewIncidentTriageServiceClient(apiKey string) *IncidentTriageServiceClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &IncidentTriageServiceClient{
-		APIKey:     apiKey,
-		Endpoint:   DefaultJevEndpoint,
-		Model:      DefaultJevModel,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-	}
+	return &IncidentTriageServiceClient{Client: jev.Client{APIKey: apiKey, Endpoint: "https://api.typesafe.ai/v1/systemone", Model: "jev-latest", HTTPClient: &http.Client{Timeout: 30 * time.Second}}}
 }
-
 func (c *IncidentTriageServiceClient) BuildTriageQuestions() map[string]any {
-	return map[string]any{
-		"routing_target": map[string]any{
-			"type":         "choice",
-			"instructions": "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.",
-			"criteria":     map[string]any{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"},
-		},
-		"requiresImmediatePaging": map[string]any{
-			"type":         "noul",
-			"instructions": "Does this incident indicate active user-facing outage requiring paging?",
-		},
-		"priority": map[string]any{
-			"type":         "choice",
-			"instructions": "Assess the operational severity and customer blast radius",
-			"criteria":     map[string]any{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"},
-		},
-		"urgencyRating": map[string]any{
-			"type":         "score",
-			"instructions": "How urgently does this issue need to be resolved?",
-			"criteria":     []string{"Minor; can wait", "Low urgency", "Needs attention soon", "Urgent", "Immediate action required"},
-		},
-		"blastRadiusPercentage": map[string]any{
-			"type":         "score",
-			"instructions": "Estimated percentage of production infrastructure impacted",
-			"criteria":     []string{"No impact", "Limited localized impact", "Moderate impact; several services affected", "Substantial impact; major degradation", "Catastrophic outage; total failure"},
-		},
-		"complianceClassification": map[string]any{
-			"type":         "choice",
-			"instructions": "Categorize any sensitive or regulated data exposed in the incident report",
-			"criteria":     map[string]any{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""},
-		},
-	}
+	return jev.Questions([]jev.Question{{Name: "routing_target", Type: "choice", Instructions: "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.", Field: "routing_target", Kind: "oneof", Threshold: 0, Choices: map[string]string{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"}, Levels: []jev.Level{}, Oneof: map[string]string{"automated_runbook": "string", "incident_commander": "string", "oncall_engineer": "string"}}, {Name: "requiresImmediatePaging", Type: "noul", Instructions: "Does this incident indicate active user-facing outage requiring paging?", Field: "requires_immediate_paging", Kind: "bool", Threshold: 0.8500000238418579, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "priority", Type: "choice", Instructions: "Assess the operational severity and customer blast radius", Field: "priority", Kind: "enum", Threshold: 0, Choices: map[string]string{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "urgencyRating", Type: "score", Instructions: "How urgently does this issue need to be resolved?", Field: "urgency_rating", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Minor; can wait"}, {Value: 2, Description: "Low urgency"}, {Value: 3, Description: "Needs attention soon"}, {Value: 4, Description: "Urgent"}, {Value: 5, Description: "Immediate action required"}}, Oneof: map[string]string{}}, {Name: "blastRadiusPercentage", Type: "score", Instructions: "Estimated percentage of production infrastructure impacted", Field: "blast_radius_percentage", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "No impact"}, {Value: 25, Description: "Limited localized impact"}, {Value: 50, Description: "Moderate impact; several services affected"}, {Value: 75, Description: "Substantial impact; major degradation"}, {Value: 100, Description: "Catastrophic outage; total failure"}}, Oneof: map[string]string{}}, {Name: "complianceClassification", Type: "choice", Instructions: "Categorize any sensitive or regulated data exposed in the incident report", Field: "compliance_classification", Kind: "string", Threshold: 0, Choices: map[string]string{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}})
 }
-
 func (c *IncidentTriageServiceClient) Triage(ctx context.Context, req *TriageRequest) (*TriageResponse, error) {
-	stateBytes, err := protojson.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-	var stateJSON any
-	if err := json.Unmarshal(stateBytes, &stateJSON); err != nil {
-		return nil, fmt.Errorf("failed to parse state json: %w", err)
-	}
-	payload := map[string]any{
-		"state":     stateJSON,
-		"model":     c.Model,
-		"questions": c.BuildTriageQuestions(),
-	}
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+	result, err := c.TriageDetailed(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
-	resp, err := c.HTTPClient.Do(httpReq)
+	return result.Value, nil
+}
+func (c *IncidentTriageServiceClient) TriageDetailed(ctx context.Context, req *TriageRequest) (*jev.Evaluation[*TriageResponse], error) {
+	out := &TriageResponse{}
+	response, err := c.Client.Evaluate(ctx, req, []jev.Question{{Name: "routing_target", Type: "choice", Instructions: "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.", Field: "routing_target", Kind: "oneof", Threshold: 0, Choices: map[string]string{"automated_runbook": "automated_runbook", "incident_commander": "incident_commander", "oncall_engineer": "oncall_engineer"}, Levels: []jev.Level{}, Oneof: map[string]string{"automated_runbook": "string", "incident_commander": "string", "oncall_engineer": "string"}}, {Name: "requiresImmediatePaging", Type: "noul", Instructions: "Does this incident indicate active user-facing outage requiring paging?", Field: "requires_immediate_paging", Kind: "bool", Threshold: 0.8500000238418579, Choices: map[string]string{}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "priority", Type: "choice", Instructions: "Assess the operational severity and customer blast radius", Field: "priority", Kind: "enum", Threshold: 0, Choices: map[string]string{"PRIORITY_LEVEL_CRITICAL": "Complete service outage affecting >10% of traffic", "PRIORITY_LEVEL_HIGH": "Significant latency spike or core feature degradation", "PRIORITY_LEVEL_LOW": "Minor cosmetic or non-customer-impacting bug", "PRIORITY_LEVEL_MEDIUM": "Isolated component failure with working fallback"}, Levels: []jev.Level{}, Oneof: map[string]string{}}, {Name: "urgencyRating", Type: "score", Instructions: "How urgently does this issue need to be resolved?", Field: "urgency_rating", Kind: "int32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 1, Description: "Minor; can wait"}, {Value: 2, Description: "Low urgency"}, {Value: 3, Description: "Needs attention soon"}, {Value: 4, Description: "Urgent"}, {Value: 5, Description: "Immediate action required"}}, Oneof: map[string]string{}}, {Name: "blastRadiusPercentage", Type: "score", Instructions: "Estimated percentage of production infrastructure impacted", Field: "blast_radius_percentage", Kind: "float32", Threshold: 0, Choices: map[string]string{}, Levels: []jev.Level{{Value: 0, Description: "No impact"}, {Value: 25, Description: "Limited localized impact"}, {Value: 50, Description: "Moderate impact; several services affected"}, {Value: 75, Description: "Substantial impact; major degradation"}, {Value: 100, Description: "Catastrophic outage; total failure"}}, Oneof: map[string]string{}}, {Name: "complianceClassification", Type: "choice", Instructions: "Categorize any sensitive or regulated data exposed in the incident report", Field: "compliance_classification", Kind: "string", Threshold: 0, Choices: map[string]string{"INTERNAL_CONFIDENTIAL": "", "PCI_DSS": "", "PUBLIC": "", "RESTRICTED_PII": ""}, Levels: []jev.Level{}, Oneof: map[string]string{}}}, out)
 	if err != nil {
-		return nil, fmt.Errorf("Jev request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
-	}
-	var rawResp struct {
-		Answers map[string]struct {
-			Choice string  `json:"choice"`
-			Noul   any     `json:"noul"`
-			Score  float64 `json:"score"`
-		} `json:"answers"`
-		Choices map[string]struct {
-			Choice string `json:"choice"`
-		} `json:"choices"`
-		Nouls map[string]struct {
-			Result bool    `json:"result"`
-			Noul   float64 `json:"noul"`
-		} `json:"nouls"`
-		Scores map[string]struct {
-			Score float64 `json:"score"`
-		} `json:"scores"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
-	}
-	decisions := &TriageResponse{}
-	var choice_routing_target string
-	if item, ok := rawResp.Answers["routing_target"]; ok && item.Choice != "" {
-		choice_routing_target = item.Choice
-	} else if item, ok := rawResp.Choices["routing_target"]; ok {
-		choice_routing_target = item.Choice
-	}
-	if choice_routing_target != "" {
-		switch choice_routing_target {
-		case "automated_runbook":
-			decisions.RoutingTarget = &TriageResponse_AutomatedRunbook{AutomatedRunbook: choice_routing_target}
-		case "incident_commander":
-			decisions.RoutingTarget = &TriageResponse_IncidentCommander{IncidentCommander: choice_routing_target}
-		case "oncall_engineer":
-			decisions.RoutingTarget = &TriageResponse_OncallEngineer{OncallEngineer: choice_routing_target}
-		}
-	}
-	if item, ok := rawResp.Answers["requiresImmediatePaging"]; ok && item.Noul != nil {
-		switch v := item.Noul.(type) {
-		case bool:
-			decisions.RequiresImmediatePaging = v
-		case float64:
-			decisions.RequiresImmediatePaging = v >= 0.8500000238418579
-		}
-	} else if item, ok := rawResp.Nouls["requiresImmediatePaging"]; ok {
-		if item.Noul != 0 {
-			decisions.RequiresImmediatePaging = item.Noul >= 0.8500000238418579
-		} else {
-			decisions.RequiresImmediatePaging = item.Result
-		}
-	}
-	var choice_priority string
-	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
-		choice_priority = item.Choice
-	} else if item, ok := rawResp.Choices["priority"]; ok {
-		choice_priority = item.Choice
-	}
-	if choice_priority != "" {
-		if val, ok := PriorityLevel_value[choice_priority]; ok {
-			decisions.Priority = PriorityLevel(val)
-		}
-	}
-	var scorePos_urgencyRating float64
-	var hasScore_urgencyRating bool
-	if item, ok := rawResp.Answers["urgencyRating"]; ok {
-		scorePos_urgencyRating = item.Score
-		hasScore_urgencyRating = true
-	} else if item, ok := rawResp.Scores["urgencyRating"]; ok {
-		scorePos_urgencyRating = item.Score
-		hasScore_urgencyRating = true
-	}
-	if hasScore_urgencyRating {
-		sVal := interpolateScore(scorePos_urgencyRating, []float64{1, 2, 3, 4, 5})
-		decisions.UrgencyRating = int32(math.Round(sVal))
-	}
-	var scorePos_blastRadiusPercentage float64
-	var hasScore_blastRadiusPercentage bool
-	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok {
-		scorePos_blastRadiusPercentage = item.Score
-		hasScore_blastRadiusPercentage = true
-	} else if item, ok := rawResp.Scores["blastRadiusPercentage"]; ok {
-		scorePos_blastRadiusPercentage = item.Score
-		hasScore_blastRadiusPercentage = true
-	}
-	if hasScore_blastRadiusPercentage {
-		sVal := interpolateScore(scorePos_blastRadiusPercentage, []float64{0, 25, 50, 75, 100})
-		decisions.BlastRadiusPercentage = float32(sVal)
-	}
-	var choice_complianceClassification string
-	if item, ok := rawResp.Answers["complianceClassification"]; ok && item.Choice != "" {
-		choice_complianceClassification = item.Choice
-	} else if item, ok := rawResp.Choices["complianceClassification"]; ok {
-		choice_complianceClassification = item.Choice
-	}
-	if choice_complianceClassification != "" {
-		decisions.ComplianceClassification = choice_complianceClassification
-	}
-	return decisions, nil
+	return &jev.Evaluation[*TriageResponse]{Value: out, Response: response}, nil
 }
 
+// BatchTriage evaluates requests sequentially and stops at the first error.
 func (c *IncidentTriageServiceClient) BatchTriage(ctx context.Context, reqs []*TriageRequest) ([]*TriageResponse, error) {
 	results := make([]*TriageResponse, len(reqs))
-	for i, r := range reqs {
-		res, err := c.Triage(ctx, r)
+	for i, req := range reqs {
+		value, err := c.Triage(ctx, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed evaluating item at index %d: %w", i, err)
+			return nil, fmt.Errorf("batch item %d: %w", i, err)
 		}
-		results[i] = res
+		results[i] = value
 	}
 	return results, nil
 }

@@ -58,16 +58,19 @@ func TestToPascalCase(t *testing.T) {
 }
 
 func TestParseTargets(t *testing.T) {
-	allOpts := model.ParseTargets("all")
+	allOpts, err := model.ParseTargets("all")
+	require.NoError(t, err)
 	require.True(t, allOpts.GenerateGo && allOpts.GenerateTypeScript && allOpts.GeneratePython && allOpts.GenerateJSON, "ParseTargets('all') should enable all targets")
 
-	goOnly := model.ParseTargets("go")
+	goOnly, err := model.ParseTargets("go")
+	require.NoError(t, err)
 	assert.True(t, goOnly.GenerateGo, "ParseTargets('go') should enable Go")
 	assert.True(t, goOnly.GenerateJSON, "ParseTargets('go') should enable JSON")
 	assert.False(t, goOnly.GenerateTypeScript, "ParseTargets('go') should not enable TypeScript")
 	assert.False(t, goOnly.GeneratePython, "ParseTargets('go') should not enable Python")
 
-	tsGo := model.ParseTargets("ts,go")
+	tsGo, err := model.ParseTargets("ts,go")
+	require.NoError(t, err)
 	assert.True(t, tsGo.GenerateGo, "ParseTargets('ts,go') should enable Go")
 	assert.True(t, tsGo.GenerateTypeScript, "ParseTargets('ts,go') should enable TypeScript")
 	assert.True(t, tsGo.GenerateJSON, "ParseTargets('ts,go') should enable JSON")

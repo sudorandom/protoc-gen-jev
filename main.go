@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -23,19 +24,21 @@ func main() {
 	}
 
 	var flags flag.FlagSet
-	targetOpt := flags.String("target", "all", "Target languages to generate: go, ts, python, json, all")
-	targetsOpt := flags.String("targets", "", "Alias for target")
+	var targets []string
+	addTarget := func(value string) error { targets = append(targets, value); return nil }
+	flags.Func("target", "Target language (repeat for multiple targets)", addTarget)
+	flags.Func("targets", "Alias for target", addTarget)
 
 	protogen.Options{
 		ParamFunc: flags.Set,
 	}.Run(func(gen *protogen.Plugin) error {
 		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
-		val := *targetOpt
-		if *targetsOpt != "" {
-			val = *targetsOpt
+		val := strings.Join(targets, ",")
+		targetOptions, err := model.ParseTargets(val)
+		if err != nil {
+			return err
 		}
-		targetOptions := model.ParseTargets(val)
 
 		for _, f := range gen.Files {
 			if !f.Generate {
@@ -46,7 +49,7 @@ func main() {
 			}
 
 			var specs []model.MessageSpec
-			for _, msg := range f.Messages {
+			for _, msg := range parser.AllMessages(f.Messages) {
 				spec, err := parser.ProcessMessage(msg)
 				if err != nil {
 					return err

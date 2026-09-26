@@ -6,6 +6,8 @@ inputs:
 plugins:
   - local: protoc-gen-go
     out: examples/gen/jev
+    opt:
+      - paths=source_relative
   - local: protoc-gen-es
     out: examples/gen/jev
     opt:
@@ -17,3 +19,4 @@ plugins:
     opt:
       # Options: go, ts, python, json, or all (comma-separated)
       - targets=all
+      - paths=source_relative

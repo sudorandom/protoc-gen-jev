@@ -1,6 +1,11 @@
 package model
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"google.golang.org/protobuf/compiler/protogen"
+)
 
 // QuestionType represents Jev's primitive question types.
 type QuestionType string
@@ -39,6 +44,7 @@ type Question struct {
 
 // MessageSpec represents all Jev questions extracted from a single Protobuf message.
 type MessageSpec struct {
+	Ref         *protogen.Message   `json:"-"`
 	MessageName string              `json:"message_name"`
 	Package     string              `json:"package"`
 	FileBase    string              `json:"file_base,omitempty"`
@@ -56,11 +62,12 @@ type FieldSpec struct {
 
 // MethodSpec represents an RPC method on a Service.
 type MethodSpec struct {
-	Name         string      `json:"name"`
-	InputType    string      `json:"input_type"`
-	InputFields  []FieldSpec `json:"input_fields"`
-	OutputType   string      `json:"output_type"`
-	QuestionSpec MessageSpec `json:"question_spec"`
+	Input        *protogen.Message `json:"-"`
+	Name         string            `json:"name"`
+	InputType    string            `json:"input_type"`
+	InputFields  []FieldSpec       `json:"input_fields"`
+	OutputType   string            `json:"output_type"`
+	QuestionSpec MessageSpec       `json:"question_spec"`
 }
 
 // ServiceSpec represents a Protobuf service containing Jev RPC methods.
@@ -80,14 +87,14 @@ type TargetOptions struct {
 }
 
 // ParseTargets parses comma-separated target flags like "go,ts,python,json" or "all".
-func ParseTargets(targetOpt string) TargetOptions {
+func ParseTargets(targetOpt string) (TargetOptions, error) {
 	if targetOpt == "all" || targetOpt == "" {
 		return TargetOptions{
 			GenerateJSON:       true,
 			GenerateGo:         true,
 			GenerateTypeScript: true,
 			GeneratePython:     true,
-		}
+		}, nil
 	}
 
 	var opts TargetOptions
@@ -109,7 +116,9 @@ func ParseTargets(targetOpt string) TargetOptions {
 			opts.GenerateTypeScript = true
 			opts.GeneratePython = true
 			opts.GenerateJSON = true
+		default:
+			return opts, fmt.Errorf("unknown target %q (expected go, ts, python, json, or all)", t)
 		}
 	}
-	return opts
+	return opts, nil
 }

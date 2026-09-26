@@ -1,78 +1,36 @@
 # protoc-gen-jev
 
-[![Latest Release](https://img.shields.io/github/v/release/sudorandom/protoc-gen-jev?logo=github&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/releases/latest)
-[![Go CI](https://img.shields.io/github/actions/workflow/status/sudorandom/protoc-gen-jev/go.yml?label=Go%20CI&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/actions/workflows/go.yml)
-[![Buf CI](https://img.shields.io/github/actions/workflow/status/sudorandom/protoc-gen-jev/buf.yml?label=Buf%20CI&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/actions/workflows/buf.yml)
-[![Release](https://img.shields.io/github/actions/workflow/status/sudorandom/protoc-gen-jev/publish.yml?label=Release&style=flat-square)](https://github.com/sudorandom/protoc-gen-jev/actions/workflows/publish.yml)
+[![Go CI](https://img.shields.io/github/actions/workflow/status/sudorandom/protoc-gen-jev/go.yml?label=Go%20CI)](https://github.com/sudorandom/protoc-gen-jev/actions/workflows/go.yml)
 
-> [!WARNING]
-> **Experimental**: `protoc-gen-jev` is currently experimental and under active development. APIs, question schema formats, and generated code templates are subject to change without notice.
+> **Experimental:** generated APIs and schema options may change. Pin the generator and runtime versions together.
 
-A Protobuf compiler plugin for **TypeSafe AI's Jev** and **Laya** (System One fast cognitive decision models).
+`protoc-gen-jev` turns Protobuf decision contracts into Jev question schemas and clients for Go, TypeScript, and Python. Keep request types, response types, instructions, and scoring rubrics in one versioned `.proto` definition.
 
-`protoc-gen-jev` inspects Protobuf services and messages to generate strictly typed Jev client code, question schemas, and decision structures across Go, TypeScript, and Python.
+TypeSafe's official SDKs already provide typed questions and answers. This plugin adds shared Protobuf contracts and mappings to native application messages. It does not guarantee model accuracy or eliminate the need for runtime validation.
 
----
+## What it generates
 
-## 💡 Why `protoc-gen-jev`?
+| Target | Output | Runtime dependencies |
+| --- | --- | --- |
+| Go | `*_jev.pb.go` | Protobuf Go runtime and `github.com/sudorandom/protoc-gen-jev/pkg/jev` |
+| TypeScript | `*_jev.ts` | `@bufbuild/protobuf` and `@typesafe-ai/sdk` |
+| Python | `*_jev.py` | `protobuf` and `typesafe-sdk`; `.pyi` bindings for static checking |
+| JSON | `*.jev.json` | None; an intermediate specification containing questions and mapping metadata |
 
-Jev and related cognitive decision engines (like [Laya](https://github.com/typesafe-ai)) rely on structured decisions evaluated against unstructured state. However, official client SDKs avoid strict typing—forcing developers to construct loose JSON dictionaries and parse untyped `dict` / `Record<string, unknown>` maps by hand.
+The plugin generates wrappers around native Protobuf messages. Run the corresponding Protobuf generators as well. JSON specifications are not directly usable as Jev HTTP request bodies; `BuildQuestions`/`buildQuestions`/`build_questions` produces the API question map.
 
-**`protoc-gen-jev` brings true compile-time safety to TypeSafe AI.**
+Protobuf services describe request-to-decision methods. These clients call the Jev HTTP endpoint; they are not gRPC servers or clients. Standalone message clients accept unstructured state and return the corresponding decision message.
 
-By defining your decision models as standard Protobuf services, your application and Jev share an immutable, strictly typed contract:
+## Installation and generation
 
-- **No Possibility of Type Mistakes**: Eliminate runtime typos (`res["prioriy"]`) and type mismatches. Your compiler and type checker (`go build`, `tsc`, `mypy`) catch errors before code ever deploys.
-- **Contract-First Architecture**: Define your input context (`TriageRequest`) and decision structure (`TriageResponse`) once in `.proto`; get native, idiomatic clients across Go, Python, and TypeScript for free.
-- **Zero Handwritten Schema Boilerplate**: Question rubrics, doc comments, and scoring scales live in your schema, eliminating manual, out-of-band JSON question authoring.
-- **Built-in Sanity Checks**: The plugin validates schemas at compile time, guaranteeing that RPC requests define input state, response messages contain valid decision questions, and choice/score rubrics are structurally valid.
-
----
-
-## Installation
-
-### Via `go install` (Recommended)
-
-Install the latest plugin binary directly using Go:
-
-```bash
+```sh
 go install github.com/sudorandom/protoc-gen-jev@latest
+protoc-gen-jev --version
 ```
 
-Make sure `$GOPATH/bin` (typically `~/go/bin`) is in your system `PATH`:
+Go 1.27 or newer is required. For reproducible builds, replace `latest` with a release tag and use the same version for the Go runtime dependency.
 
-```bash
-export PATH="$HOME/go/bin:$PATH"
-```
-
-### Pre-built Binaries (GitHub Releases)
-
-Pre-compiled binaries for Linux, macOS, and Windows are available on the [GitHub Releases](https://github.com/sudorandom/protoc-gen-jev/releases/latest) page.
-
-Verify that the plugin is available:
-
-```bash
-protoc-gen-jev -version
-```
-
----
-
-## Generated Targets
-
-| Target | File Suffix | Purpose |
-| :--- | :--- | :--- |
-| **Go** | `*_jev.pb.go` | Native typed Go client with strongly typed `Request` $\to$ `Response` methods |
-| **TypeScript** | `*_jev.ts` | Typed TypeScript client wrapping `@typesafe-ai/sdk` with strict interfaces |
-| **Python** | `*_jev.py` | Typed Python client wrapping `typesafe-sdk` with strict dataclasses |
-| **JSON** | `*.jev.json` | Language-agnostic Jev question schema definitions |
-
----
-
-## Usage with Buf
-
-### 1. Depend on `jev/v1/options.proto`
-
-Add the dependency to your `buf.yaml` (see [`examples/buf.yaml.example`](examples/buf.yaml.example)):
+Add the options schema to `buf.yaml`:
 
 ```yaml
 version: v2
@@ -80,290 +38,161 @@ deps:
   - buf.build/sudo-random/protoc-gen-jev
 ```
 
-Then update your dependencies:
-
-```bash
-buf dep update
-```
-
-### 2. Configure Code Generation
-
-Add `protoc-gen-jev` to your `buf.gen.yaml` (see [`examples/buf.gen.yaml`](examples/buf.gen.yaml)):
+Run `buf dep update`. A complete multi-language `buf.gen.yaml` needs companion generators:
 
 ```yaml
 version: v2
 plugins:
+  - local: protoc-gen-go
+    out: gen
+    opt: paths=source_relative
+  - local: protoc-gen-es
+    out: gen
+    opt: target=ts
+  - remote: buf.build/protocolbuffers/python:v29.3
+    out: gen
   - local: protoc-gen-jev
-    out: gen/jev
+    out: gen
     opt:
-      # Options: go, ts, python, json, or all (comma-separated)
+      - paths=source_relative
       - targets=all
 ```
 
----
+Install the local Go and protobuf-es plugins separately. Set each schema's `go_package` to the actual import path of its generated Go package, including your module prefix. Imported messages must also have their native bindings generated. This repository's complete configurations are [buf.gen.yaml](buf.gen.yaml) and [examples/buf.gen.yaml](examples/buf.gen.yaml).
 
-## Schema Definition & Service Architecture
+Targets are `go`, `ts`/`typescript`, `python`/`py`, `json`, or `all`. Unknown targets are errors. JSON specifications accompany language output. Because protoc separates options on commas, repeat the `targets` option to combine targets (for example `targets=go,targets=ts`), or use `all`.
 
-Define your request context, decision response, and Jev service in Protobuf. `protoc-gen-jev` is completely self-contained with zero external runtime dependencies.
+Python typing stubs are generated with `protoc --pyi_out=...` alongside `--python_out=...`. The repository uses a descriptor set and [generate-python-stubs.py](scripts/generate-python-stubs.py) to do this reproducibly. Put the generated root on `PYTHONPATH` when importing clients.
 
-### Comprehensive Example
-
-The example below models an **Incident Triage & Routing Service** (see [`examples/proto/incident/v1/incident.proto`](examples/proto/incident/v1/incident.proto)):
+## Decision schema
 
 ```protobuf
 syntax = "proto3";
-
-package incident.v1;
-
+package triage.v1;
+option go_package = "example.com/myapp/gen/triage/v1;triagev1";
 import "jev/v1/options.proto";
 
-enum PriorityLevel {
-  PRIORITY_LEVEL_UNSPECIFIED = 0;
-  PRIORITY_LEVEL_LOW = 1;
-  PRIORITY_LEVEL_MEDIUM = 2;
-  PRIORITY_LEVEL_HIGH = 3;
-  PRIORITY_LEVEL_CRITICAL = 4;
-}
-
-// 1. Request Context: Unstructured input state evaluated by Jev
 message TriageRequest {
-  string incident_id = 1;
-  string title = 2;
-  string description = 3;
-  string raw_logs = 4;
+  string description = 1;
 }
 
-// 2. Decision Response: Structured cognitive decisions returned by Jev
 message TriageResponse {
-  // Oneof mutual exclusion -> Jev Choice question
-  oneof routing_target {
-    string automated_runbook = 1;
-    string oncall_engineer = 2;
-    string incident_commander = 3;
-  }
-
-  // Boolean field -> Jev Noul question with calibrated threshold
-  bool requires_immediate_paging = 4 [
-    (jev.v1.field).instructions = "Does this incident indicate active user-facing outage requiring paging?",
+  optional bool page = 1 [
+    (jev.v1.field).instructions = "Does this incident require immediate paging?",
     (jev.v1.field).noul = { threshold: 0.85 }
   ];
-
-  // Enum field with criteria guidance -> Jev Choice question
-  PriorityLevel priority = 5 [
-    (jev.v1.field).instructions = "Assess the operational severity and customer blast radius",
-    (jev.v1.field).choice = {
-      criteria: {
-        key: "PRIORITY_LEVEL_CRITICAL",
-        value: "Complete service outage affecting >10% of traffic"
-      },
-      criteria: {
-        key: "PRIORITY_LEVEL_HIGH",
-        value: "Significant latency spike or core feature degradation"
-      },
-      criteria: {
-        key: "PRIORITY_LEVEL_MEDIUM",
-        value: "Isolated component failure with working fallback"
-      },
-      criteria: {
-        key: "PRIORITY_LEVEL_LOW",
-        value: "Minor cosmetic or non-customer-impacting bug"
-      }
-    }
-  ];
-
-  // Bounded integer range -> Jev Score with discrete rubric [1, 2, 3, 4, 5]
-  int32 urgency_rating = 6 [
-    (jev.v1.field).instructions = "How urgently does this issue need to be resolved?",
-    (jev.v1.field).score = { min: 1, max: 5 }
-  ];
-
-  // Continuous numeric scale -> Jev Score with 5-tier interpolated rubric [0.0..100.0]
-  float blast_radius_percentage = 7 [
-    (jev.v1.field).instructions = "Estimated percentage of production infrastructure impacted",
-    (jev.v1.field).score = { min: 0.0, max: 100.0 }
-  ];
-
-  // String with discrete allowed choices -> Jev Choice question
-  string compliance_classification = 8 [
-    (jev.v1.field).instructions = "Categorize sensitive or regulated data exposed in the incident report",
-    (jev.v1.field).choice = {
-      choices: ["PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII", "PCI_DSS"]
+  int32 urgency = 2 [
+    (jev.v1.field).instructions = "How urgently does this incident need attention?",
+    (jev.v1.field).score = {
+      levels: [
+        { value: 1, description: "Minor; can wait for routine maintenance" },
+        { value: 3, description: "Degraded service; a workaround exists" },
+        { value: 5, description: "Active outage; immediate intervention required" }
+      ]
     }
   ];
 }
 
-// 3. Service Definition: Strongly-typed RPC interface for Jev
-service IncidentTriageService {
+service TriageService {
   rpc Triage(TriageRequest) returns (TriageResponse);
 }
 ```
 
----
+The [incident example](examples/proto/incident/v1/incident.proto) also demonstrates enum criteria, string choices, and routing oneofs.
 
-## Service & Field Options Reference
+### Options
 
-### Service & Method Options (`(jev.v1.service)`, `(jev.v1.method)`)
+| Option | Behavior |
+| --- | --- |
+| `instructions` | Overrides the field comment; otherwise a generated prompt is used |
+| `skip` | Excludes the field or oneof member from decision questions |
+| `choice.choices` | Allowed string labels or enum names |
+| `choice.not_in` | Excludes enum names |
+| `choice.criteria` | Descriptions for allowed labels; cannot bypass filtering |
+| `score.levels` | 2–10 ordered `{ value, description }` rubric levels |
+| `noul.threshold` | Optional probability threshold in `[0, 1]`; unset defaults to `0.5`, explicit zero is preserved |
 
-`protoc-gen-jev` features **smart auto-discovery**: any RPC whose request or response references `(jev.v1.field)` is automatically generated as a Jev RPC. Non-Jev services are safely ignored.
+`score.min`, `score.max`, and `score.scale` are not supported. Level values must be finite and strictly increasing. Integer fields require integral level values within the supported numeric domain. Provide domain-specific descriptions; numerical labels alone make weak rubrics.
 
-You can also explicitly control code generation:
+An RPC is discovered when its request or response has a Jev field annotation. Set `(jev.v1.service).enabled = true` or `(jev.v1.method).enabled = true` to opt in without field annotations. Explicit false disables the service or method. Standalone message clients are independently generated for messages containing naturally mapped decision fields, including nested message declarations; disabling an RPC does not disable standalone clients.
 
-```protobuf
-service CustomService {
-  // Force-enable Jev generation (activates natural type mappings even without field options)
-  option (jev.v1.service).enabled = true;
+## Supported schema boundaries
 
-  rpc Evaluate(CustomRequest) returns (CustomResponse);
+| Feature | Support |
+| --- | --- |
+| Multiple files per package; imported request/response types | Supported |
+| Nested message declarations and imported enums | Supported |
+| Optional scalar decisions and custom JSON names | Supported; native Protobuf conversion preserves presence |
+| Bool | Noul |
+| Enum | Choice; zero/`_UNSPECIFIED` values excluded |
+| String | Choice when explicitly configured; otherwise ignored in responses |
+| Signed, unsigned, fixed and floating point numbers | Score |
+| Decision oneof | String/bytes members only; selected label stored as the member value |
+| Other oneof member kinds | Rejected during generation |
+| Request fields | Scalars, enums and optional scalar fields |
+| Repeated, map, message or bytes request fields | Rejected |
+| Complex response fields | Ignored when unannotated; rejected when annotated unless skipped |
+| Streaming RPCs | Rejected |
 
-  rpc StandardRpc(StandardRequest) returns (StandardResponse) {
-    // Explicitly exclude a non-Jev RPC
-    option (jev.v1.method).enabled = false;
-  }
-}
-```
+Integer score level values for 64-bit fields are restricted to `±(2^53−1)` (unsigned: `0..2^53−1`) so interpolation is consistent across languages. Native 64-bit responses still use Go integers, Python integers and TypeScript `bigint`. Request integers retain their full Protobuf range.
 
-### Field Options Reference (`(jev.v1.field)`)
+A decision oneof selects a route; it does not generate arbitrary member content. Prefer an enum if only a routing label is needed.
 
-Options are grouped by Jev's cognitive primitives (`choice`, `score`, `noul`):
+## Client use
 
-| Option | Type | Description |
-| :--- | :--- | :--- |
-| `instructions` | `string` | Custom instructions / prompt sent to Jev. Defaults to the field's Protobuf doc comment if omitted. |
-| `skip` | `bool` | When `true`, completely skips this field during evaluation. |
-| **`choice`** | `ChoiceRules` | Configures discrete selection choices. |
-| `choice.choices` | `repeated string` | Explicit whitelist of allowed choice values (for strings or enums). |
-| `choice.not_in` | `repeated string` | Blacklist of enum value names to exclude from choices. |
-| `choice.criteria` | `map<string, string>` | Descriptive rubric criteria attached to specific options (labels $\to$ descriptions). |
-| **`score`** | `ScoreRules` | Configures continuous or rubric score evaluations. |
-| `score.min` | `float` | Lower bound of rubric scale (default: `0.0`). |
-| `score.max` | `float` | Upper bound of rubric scale (default: `100.0`). |
-| `score.scale` | `repeated float` | Explicit discrete rubric tiers (e.g. `[1, 2, 3]` or `[10, 20, 50, 100]`). |
-| **`noul`** | `NoulRules` | Configures binary yes/no intent questions. |
-| `noul.threshold` | `float` | Confidence threshold `[0.0 - 1.0]` required to evaluate as `true`. |
+Complete, compiled examples:
 
----
+- [Go](examples/go/main.go)
+- [TypeScript](examples/typescript/index.ts)
+- [Python](examples/python/main.py)
 
-## Strictly Typed Client Usage
+Normal methods return native Protobuf messages. Additional detailed methods retain provider metadata:
 
-### Go
+| Operation | Go | TypeScript | Python |
+| --- | --- | --- | --- |
+| Service call | `Triage` | `triage` | `triage` |
+| With metadata | `TriageDetailed` | `triageDetailed` | `triage_detailed` |
+| Standalone call | `Evaluate` | `evaluate` | `evaluate` |
+| With metadata | `EvaluateDetailed` | `evaluateDetailed` | `evaluate_detailed` |
 
-```go
-package main
+Detailed results contain `Value`/`value` and `Response`/`response`. Go's response contains model, usage, canonical answers and the original raw JSON; TypeScript and Python retain the complete SDK response. Probabilities and confidence remain accessible through the answers. Each result belongs to its call; clients do not store a shared last response.
 
-import (
-	"context"
-	"fmt"
-	"os"
+TypeScript requests are created with `create(TriageRequestSchema, {...})`, imported from the native `_pb` module. Python returns Protobuf messages, not dataclasses. Only the detailed evaluation envelope is a dataclass.
 
-	incidentv1 "your_project/gen/jev/incident/v1"
-)
+### Conversion and error contract
 
-func main() {
-	client := incidentv1.NewIncidentTriageServiceClient(os.Getenv("TYPESAFE_API_KEY"))
+Every requested decision must be present. Unknown choice labels, wrong answer types, missing/null values, and out-of-range scores or probabilities cause an error. Canonical `answers` require the correct `type` discriminator. Legacy `choices`/`scores`/`nouls` groups are accepted when `answers` is absent; an invalid canonical answer never falls back to a legacy group. Boolean Noul values are accepted for compatibility with backends that have already thresholded them.
 
-	// Single evaluation: strongly typed request -> strongly typed response
-	res, err := client.Triage(context.Background(), &incidentv1.TriageRequest{
-		IncidentId:  "INC-1042",
-		Title:       "Database connection pool exhausted",
-		Description: "API latency increased to 4500ms and 500 errors spike to 12%",
-	})
-	if err != nil {
-		panic(err)
-	}
+Scores are zero-based rubric positions. A fractional position is linearly interpolated between adjacent domain values. Integer results round halfway **away from zero** in all languages. This conversion is not the same as computing an expected domain value from the full distribution when levels are unevenly spaced; use detailed probabilities if that is what your application needs.
 
-	fmt.Printf("Route: %s, Priority: %s, Urgency: %d\n",
-		res.RoutingTarget, res.Priority, res.UrgencyRating)
+Protobuf requests use standard Protobuf JSON names in every language. Standalone raw JSON is passed as supplied. Generated batch methods execute sequentially, preserve order, and stop on the first failure. They do not return partial results or start later requests after failure.
 
-	// Batch evaluation: slice of typed requests -> slice of typed responses
-	batch, err := client.BatchTriage(context.Background(), []*incidentv1.TriageRequest{
-		{IncidentId: "INC-1043", Title: "Memory leak in worker pool"},
-		{IncidentId: "INC-1044", Title: "Elevated cache miss rate"},
-	})
-}
-```
+Go supports context cancellation, an injectable HTTP client, a default 30-second timeout, and a 16 MiB response limit. Set `Endpoint` and `Model` on the client. Go does not automatically retry; TypeScript/Python use their SDK's retry configuration. Inject a configured SDK client to control endpoint, model, timeouts, retry policy and lifetime.
 
-### TypeScript
+## Validation and evaluation
 
-```typescript
-import {
-  IncidentTriageServiceClient,
-  TriageRequest,
-} from "./gen/jev/incident/v1/incident_jev";
-
-const client = new IncidentTriageServiceClient();
-
-// Single evaluation
-const res = await client.triage({
-  incident_id: "INC-1042",
-  title: "Database connection pool exhausted",
-  description: "API latency increased to 4500ms and 500 errors spike to 12%",
-  raw_logs: "pq: remaining connection slots are reserved",
-});
-
-console.log(`Route: ${res.routing_target}, Priority: ${res.priority}`);
-
-// Batch evaluation
-const batch = await client.batchTriage([
-  { incident_id: "INC-1043", title: "Memory leak in worker pool" },
-  { incident_id: "INC-1044", title: "Elevated cache miss rate" },
-]);
-```
-
-### Python
-
-```python
-from gen.jev.incident.v1.incident_jev import (
-    IncidentTriageServiceClient,
-    TriageRequest,
-)
-
-client = IncidentTriageServiceClient()
-
-# Single evaluation
-res = client.triage(TriageRequest(
-    incident_id="INC-1042",
-    title="Database connection pool exhausted",
-    description="API latency increased to 4500ms and 500 errors spike to 12%",
-    raw_logs="pq: remaining connection slots are reserved",
-))
-
-print(f"Route: {res.routing_target}, Priority: {res.priority}, Urgency: {res.urgency_rating}")
-
-# Batch evaluation
-batch = client.batch_triage([
-    TriageRequest(incident_id="INC-1043", title="Memory leak in worker pool"),
-    TriageRequest(incident_id="INC-1044", title="Elevated cache miss rate"),
-])
-```
-
----
-
-## Development & Testing
-
-Manage the project using `just`:
-
-```bash
-# Build binary
-just build
-
-# Generate code from test protos and examples
-just generate
-
-# Re-generate Go bindings for jev/v1 options
-just generate-options
-
-# Run all unit tests, syntax checks, and golden file verification
-just test
-
-# Run end-to-end examples with live FauxRPC mock container
-just run-examples
-
-# Run linters (buf lint, go vet, golangci-lint)
+```sh
+just test          # generation, native compilation, strict TS, Python typing,
+                   # shared response fixtures, golden comparison, Go + Docker tests
 just lint
+just run-examples  # all three languages against FauxRPC unless a backend is configured
 ```
 
----
+The shared [response fixtures](testdata/behavior/responses.json) exercise the same success and failure cases in all three languages. Generation starts with clean output directories, and golden verification checks both unexpected and missing files. Dependency versions used for Python checks are locked in `requirements-dev.txt`; generator versions are pinned in `mise.toml`.
 
-## License
+Mocks establish transport and mapping behavior. They do not measure model quality. To evaluate a real Jev or compatible Laya backend using a labelled dataset:
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```sh
+# Uses TYPESAFE_API_KEY for the hosted service; or pass --endpoint for a local server.
+.venv/bin/python scripts/evaluate.py --dataset testdata/evaluation/incidents.json --output evaluation.json
+```
+
+The harness records exact-match accuracy against expected fields, per-field accuracy, latency, model identity, token usage and raw answers. The bundled labels are illustrative, not a validated benchmark. Use representative held-out examples, inspect uncertain answers, and compare reports before changing rubrics, thresholds or model versions. No live quality or backend-compatibility result is implied by a passing mock suite.
+
+For local Laya, use `just start-laya`, then run the evaluation with `--endpoint http://127.0.0.1:8000`. SDK endpoints are base URLs; the Go client uses the full `/v1/systemone` URL. [TypeSafe's scoring guidance](https://docs.typesafe.ai/primitives/score) explains rubric design and confidence.
+
+## Development
+
+`just generate` refreshes clients and Python stubs. `just generate-options` refreshes the options Go binding. `just update-golden` intentionally replaces expected output. `just update-python-lock` resolves development dependencies after an intentional dependency update.
+
+MIT licensed; see [LICENSE](LICENSE).

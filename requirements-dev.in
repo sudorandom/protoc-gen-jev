@@ -1,0 +1,3 @@
+-r examples/python/requirements.txt
+mypy
+types-protobuf

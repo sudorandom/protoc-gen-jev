@@ -21,32 +21,32 @@
       "type": "Score",
       "instructions": "Evaluate bigCount",
       "criteria": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
+        "Very low extent or intensity",
+        "Low extent or intensity",
+        "Moderate extent or intensity",
+        "High extent or intensity",
+        "Very high extent or intensity"
       ],
       "score_levels": [
         {
           "value": 1,
-          "description": "1"
+          "description": "Very low extent or intensity"
         },
         {
           "value": 2,
-          "description": "2"
+          "description": "Low extent or intensity"
         },
         {
           "value": 3,
-          "description": "3"
+          "description": "Moderate extent or intensity"
         },
         {
           "value": 4,
-          "description": "4"
+          "description": "High extent or intensity"
         },
         {
           "value": 5,
-          "description": "5"
+          "description": "Very high extent or intensity"
         }
       ],
       "proto_field": "big_count",

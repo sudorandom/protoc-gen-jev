@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -120,7 +121,7 @@ func TestGeneratedClient_Evaluate(t *testing.T) {
 				"customBoundedScore": map[string]any{"score": 3.0}, // index 3 in [10,20,30,40,50] -> 40.0
 			},
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(completeResponse(resp))
 	}))
 	defer ts.Close()
 
@@ -150,7 +151,7 @@ func TestGeneratedClient_BatchEvaluate(t *testing.T) {
 				"ratingSmall": map[string]any{"score": 3.0}, // index 3 in [1,2,3,4,5] -> 4
 			},
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(completeResponse(resp))
 	}))
 	defer ts.Close()
 
@@ -230,5 +231,32 @@ func TestGeneratedClient_Evaluate_NetworkError(t *testing.T) {
 
 	_, err := client.Evaluate(context.Background(), map[string]any{"text": "Sample request"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Jev request failed")
+	assert.Contains(t, err.Error(), "jev request failed")
+}
+
+// Fill every requested question; partial responses are now rejected.
+func completeResponse(overrides map[string]any) map[string]any {
+	out := map[string]any{"choices": map[string]any{}, "nouls": map[string]any{}, "scores": map[string]any{}}
+	for name, raw := range rulesv1.NewRuleTestRecordJevClient("test").BuildQuestions() {
+		q := raw.(map[string]any)
+		switch q["type"] {
+		case "choice":
+			var labels []string
+			for label := range q["criteria"].(map[string]any) {
+				labels = append(labels, label)
+			}
+			sort.Strings(labels)
+			out["choices"].(map[string]any)[name] = map[string]any{"choice": labels[0]}
+		case "score":
+			out["scores"].(map[string]any)[name] = map[string]any{"score": 0}
+		case "noul":
+			out["nouls"].(map[string]any)[name] = map[string]any{"noul": 0}
+		}
+	}
+	for group, entries := range overrides {
+		for key, value := range entries.(map[string]any) {
+			out[group].(map[string]any)[key] = value
+		}
+	}
+	return out
 }

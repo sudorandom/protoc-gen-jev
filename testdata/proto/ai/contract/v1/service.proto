@@ -1,0 +1,13 @@
+syntax = "proto3";
+package ai.contract.v1;
+option go_package = "github.com/sudorandom/protoc-gen-jev/gen/jev/ai/contract/v1;contractv1";
+import "jev/v1/options.proto";
+import "ai/contract/v1/contract.proto";
+import "ai/shared/v1/shared.proto";
+
+service ContractService {
+  option (jev.v1.service).enabled = true;
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc External(ai.shared.v1.ExternalRequest) returns (ai.shared.v1.ExternalResponse);
+  rpc Nested(Container.NestedRequest) returns (Container.NestedResponse);
+}

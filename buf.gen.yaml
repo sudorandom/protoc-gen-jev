@@ -5,6 +5,8 @@ inputs:
 plugins:
   - local: protoc-gen-go
     out: gen/jev
+    opt:
+      - paths=source_relative
   - local: protoc-gen-es
     out: gen/jev
     opt:
@@ -15,3 +17,4 @@ plugins:
     out: gen/jev
     opt:
       - targets=all
+      - paths=source_relative
