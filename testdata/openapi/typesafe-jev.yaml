@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: TypeSafe AI Jev System One API
+  description: OpenAPI 3.0 specification for TypeSafe AI's Jev (System One fast cognitive model)
+  version: 1.0.0
+servers:
+  - url: /
+paths:
+  /v1/systemone:
+    post:
+      summary: Evaluate state and questions against Jev System One
+      operationId: systemOne
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemOneRequest'
+      responses:
+        '200':
+          description: Structured classification and scoring decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemOneResponse'
+              example:
+                choices:
+                  routing_target:
+                    choice: oncall_engineer
+                    probabilities:
+                      oncall_engineer: 0.88
+                      automated_runbook: 0.08
+                      incident_commander: 0.04
+                  priority:
+                    choice: PRIORITY_LEVEL_HIGH
+                    probabilities:
+                      PRIORITY_LEVEL_HIGH: 0.75
+                      PRIORITY_LEVEL_CRITICAL: 0.20
+                      PRIORITY_LEVEL_MEDIUM: 0.05
+                  complianceClassification:
+                    choice: INTERNAL_CONFIDENTIAL
+                    probabilities:
+                      INTERNAL_CONFIDENTIAL: 0.95
+                      PUBLIC: 0.05
+                nouls:
+                  requiresImmediatePaging:
+                    result: true
+                    probability: 0.92
+                scores:
+                  urgencyRating:
+                    score: 4
+                    probabilities: [0.02, 0.03, 0.10, 0.75, 0.10]
+                  blastRadiusPercentage:
+                    score: 45.0
+                    probabilities: [0.05, 0.15, 0.65, 0.10, 0.05]
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    SystemOneRequest:
+      type: object
+      required:
+        - state
+        - questions
+      properties:
+        state:
+          description: Contextual state, logs, or payload to be evaluated by the model
+        questions:
+          type: object
+          description: Map of question ID to Question definition
+          additionalProperties:
+            $ref: '#/components/schemas/Question'
+    Question:
+      type: object
+      required:
+        - type
+        - instructions
+      properties:
+        type:
+          type: string
+          enum: [choice, noul, score]
+        instructions:
+          type: string
+          description: Prompt guidance for the question
+        criteria:
+          description: Criteria mapping or array of allowed values
+    SystemOneResponse:
+      type: object
+      properties:
+        choices:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ChoiceResult'
+        nouls:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/NoulResult'
+        scores:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ScoreResult'
+    ChoiceResult:
+      type: object
+      required:
+        - choice
+      properties:
+        choice:
+          type: string
+        probabilities:
+          type: object
+          additionalProperties:
+            type: number
+    NoulResult:
+      type: object
+      required:
+        - result
+      properties:
+        result:
+          type: boolean
+        probability:
+          type: number
+    ScoreResult:
+      type: object
+      required:
+        - score
+      properties:
+        score:
+          type: number
+        probabilities:
+          type: array
+          items:
+            type: number

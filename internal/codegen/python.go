@@ -98,7 +98,8 @@ func GeneratePython(gen *protogen.Plugin, file *protogen.File, specs []model.Mes
 				g.P(fmt.Sprintf(`            out[%q] = resp.choices[%q].choice`, q.ProtoField, jsonName))
 			case model.TypeNoul:
 				g.P(fmt.Sprintf(`        if %q in resp.nouls:`, jsonName))
-				g.P(fmt.Sprintf(`            out[%q] = resp.nouls[%q].result`, q.ProtoField, jsonName))
+				g.P(fmt.Sprintf(`            _item = resp.nouls[%q]`, jsonName))
+				g.P(fmt.Sprintf(`            out[%q] = getattr(_item, "result", getattr(_item, "noul", False))`, q.ProtoField))
 			case model.TypeScore:
 				g.P(fmt.Sprintf(`        if %q in resp.scores:`, jsonName))
 				g.P(fmt.Sprintf(`            out[%q] = resp.scores[%q].score`, q.ProtoField, jsonName))

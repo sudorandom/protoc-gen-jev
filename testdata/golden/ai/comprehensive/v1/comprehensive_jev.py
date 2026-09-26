@@ -113,13 +113,15 @@ class ComprehensiveRecordJevClient:
         if "latitude" in resp.scores:
             out["latitude"] = resp.scores["latitude"].score
         if "isEnabled" in resp.nouls:
-            out["is_enabled"] = resp.nouls["isEnabled"].result
+            _item = resp.nouls["isEnabled"]
+            out["is_enabled"] = getattr(_item, "result", getattr(_item, "noul", False))
         if "status" in resp.choices:
             out["status"] = resp.choices["status"].choice
         if "payload" in resp.choices:
             out["payload"] = resp.choices["payload"].choice
         if "churnRisk" in resp.nouls:
-            out["churn_risk"] = resp.nouls["churnRisk"].result
+            _item = resp.nouls["churnRisk"]
+            out["churn_risk"] = getattr(_item, "result", getattr(_item, "noul", False))
         if "accountTier" in resp.choices:
             out["account_tier"] = resp.choices["accountTier"].choice
         return out

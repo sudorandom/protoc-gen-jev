@@ -1,0 +1,95 @@
+stubs:
+  - name: Default Jev System One Incident Response
+    target:
+      operationId: systemOne
+    response:
+      status: 200
+      headers:
+        Content-Type: application/json
+      body:
+        model: jev-latest
+        usage:
+          input_tokens: 42
+          output_tokens: 6
+        choices:
+          routing_target:
+            choice: oncall_engineer
+            probabilities:
+              oncall_engineer: 0.88
+              automated_runbook: 0.08
+              incident_commander: 0.04
+          priority:
+            choice: PRIORITY_LEVEL_HIGH
+            probabilities:
+              PRIORITY_LEVEL_HIGH: 0.75
+              PRIORITY_LEVEL_CRITICAL: 0.20
+              PRIORITY_LEVEL_MEDIUM: 0.05
+          complianceClassification:
+            choice: INTERNAL_CONFIDENTIAL
+            probabilities:
+              INTERNAL_CONFIDENTIAL: 0.95
+              PUBLIC: 0.05
+        nouls:
+          requiresImmediatePaging:
+            result: true
+            probability: 0.92
+        scores:
+          urgencyRating:
+            score: 4
+            probabilities: [0.02, 0.03, 0.10, 0.75, 0.10]
+          blastRadiusPercentage:
+            score: 45.0
+            probabilities: [0.05, 0.15, 0.65, 0.10, 0.05]
+        answers:
+          routing_target:
+            type: choice
+            choice: oncall_engineer
+            confidence: 0.88
+            probabilities:
+              oncall_engineer: 0.88
+              automated_runbook: 0.08
+              incident_commander: 0.04
+          requiresImmediatePaging:
+            type: noul
+            noul: 0.92
+          priority:
+            type: choice
+            choice: PRIORITY_LEVEL_HIGH
+            confidence: 0.75
+            probabilities:
+              PRIORITY_LEVEL_HIGH: 0.75
+              PRIORITY_LEVEL_CRITICAL: 0.20
+              PRIORITY_LEVEL_MEDIUM: 0.05
+          urgencyRating:
+            type: score
+            score: 4.0
+            confidence: 0.75
+            legend:
+              "1": "Low"
+              "5": "Critical"
+            probabilities:
+              "1": 0.02
+              "2": 0.03
+              "3": 0.10
+              "4": 0.75
+              "5": 0.10
+          blastRadiusPercentage:
+            type: score
+            score: 45.0
+            confidence: 0.65
+            legend:
+              "0.0": "0%"
+              "100.0": "100%"
+            probabilities:
+              "0.0": 0.05
+              "25.0": 0.15
+              "50.0": 0.65
+              "75.0": 0.10
+              "100.0": 0.05
+          complianceClassification:
+            type: choice
+            choice: INTERNAL_CONFIDENTIAL
+            confidence: 0.95
+            probabilities:
+              INTERNAL_CONFIDENTIAL: 0.95
+              PUBLIC: 0.05

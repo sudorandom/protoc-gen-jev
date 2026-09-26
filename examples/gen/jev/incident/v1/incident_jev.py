@@ -56,7 +56,8 @@ class IncidentTriageJevClient:
         if "routing_target" in resp.choices:
             out["routing_target"] = resp.choices["routing_target"].choice
         if "requiresImmediatePaging" in resp.nouls:
-            out["requires_immediate_paging"] = resp.nouls["requiresImmediatePaging"].result
+            _item = resp.nouls["requiresImmediatePaging"]
+            out["requires_immediate_paging"] = getattr(_item, "result", getattr(_item, "noul", False))
         if "priority" in resp.choices:
             out["priority"] = resp.choices["priority"].choice
         if "urgencyRating" in resp.scores:

@@ -120,7 +120,8 @@ class ActionItemJevClient:
         if "priority" in resp.choices:
             out["priority"] = resp.choices["priority"].choice
         if "requiresImmediateAction" in resp.nouls:
-            out["requires_immediate_action"] = resp.nouls["requiresImmediateAction"].result
+            _item = resp.nouls["requiresImmediateAction"]
+            out["requires_immediate_action"] = getattr(_item, "result", getattr(_item, "noul", False))
         return out
 
     def batch_evaluate(self, states: List[Dict[str, Any] | str]) -> List[Dict[str, Any]]:
