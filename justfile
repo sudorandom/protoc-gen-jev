@@ -34,8 +34,12 @@ generate-options:
 # Testing & Golden Files
 # ------------------------------------------------------------------------------
 
+# Install the dependencies used to compile generated TypeScript and the example
+install-typescript-deps:
+	npm --prefix examples/typescript ci --no-audit
+
 # Run syntax and type checks across all generated languages
-test-syntax: generate
+test-syntax: generate install-typescript-deps
 	@echo "Checking generated Go code..."
 	go vet ./gen/jev/...
 	@echo "Checking generated Python syntax..."
@@ -45,7 +49,7 @@ test-syntax: generate
 	@echo "✔ Generated Go, Python, and TypeScript code verified."
 
 # Compile and verify all examples without executing them
-compile-examples: generate
+compile-examples: generate install-typescript-deps
 	@echo "Compiling Go example..."
 	go build -o /dev/null ./examples/go
 	@echo "Compiling Python example..."
@@ -56,10 +60,6 @@ compile-examples: generate
 	uv pip install -q -r examples/python/requirements.txt
 	uv run python -c "import py_compile; py_compile.compile('examples/python/main.py', doraise=True)"
 	@echo "Compiling TypeScript example..."
-	@if [ ! -d "examples/typescript/node_modules" ]; then \
-		echo "Installing TypeScript example dependencies..."; \
-		npm --prefix examples/typescript install --no-audit; \
-	fi
 	npx --prefix examples/typescript tsc --noEmit -p examples/typescript/tsconfig.json
 	@echo "✔ All examples compiled successfully."
 
