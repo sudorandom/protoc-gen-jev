@@ -42,7 +42,12 @@ compile-examples: generate
 	@echo "Compiling Go example..."
 	go build -o /dev/null ./examples/go
 	@echo "Compiling Python example..."
-	python -c "import py_compile; py_compile.compile('examples/python/main.py', doraise=True)"
+	@if [ ! -d ".venv" ]; then \
+		echo "Creating Python virtualenv via uv..."; \
+		uv venv .venv; \
+	fi
+	uv pip install -q -r examples/python/requirements.txt
+	uv run python -c "import py_compile; py_compile.compile('examples/python/main.py', doraise=True)"
 	@echo "Compiling TypeScript example..."
 	@if [ ! -d "examples/typescript/node_modules" ]; then \
 		echo "Installing TypeScript example dependencies..."; \
@@ -62,8 +67,7 @@ run-examples: compile-examples
 	go run examples/go/main.go
 	@echo ""
 	@echo "=== Running Python Example ==="
-	python -c "import typesafe_sdk" 2>/dev/null || pip install -q typesafe-sdk
-	python examples/python/main.py
+	uv run python examples/python/main.py
 	@echo ""
 	@echo "=== Running TypeScript Example ==="
 	NODE_PATH="{{ justfile_directory() }}/examples/typescript/node_modules" npx --prefix examples/typescript tsx examples/typescript/index.ts
@@ -115,5 +119,5 @@ format:
 # Clean build artifacts and generated files
 clean:
 	@echo "Cleaning artifacts..."
-	rm -rf gen/ examples/gen/ protoc-gen-jev
+	rm -rf gen/ examples/gen/ protoc-gen-jev .venv/
 	@echo "✔ Clean complete."

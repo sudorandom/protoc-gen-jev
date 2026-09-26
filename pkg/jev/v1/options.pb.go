@@ -4,7 +4,27 @@
 // 	protoc        (unknown)
 // source: jev/v1/options.proto
 
-// Experimental: Field options for mapping Protobuf fields to TypeSafe AI's Jev cognitive questions.
+// Field options for compiling Protocol Buffer definitions to TypeSafe AI's Jev cognitive model.
+//
+// By defining your data models and decision questions once in Protobuf, you get type-safe
+// decisions directly from Jev. Instead of hand-crafting schema payloads and parsing untyped JSON,
+// you can define your decision schemas in Protobuf and consume strongly typed results seamlessly
+// across Go, TypeScript, and Python using their native generated types.
+//
+// Jev is a non-autoregressive "System One" cognitive AI model developed by TypeSafe AI
+// (https://typesafe.ai) designed for fast, structured classification and evaluation rather
+// than generative text output. Inspired by Daniel Kahneman's dual-process cognitive theory
+// ("Thinking, Fast and Slow"), Jev evaluates multiple structured questions in parallel against
+// an unstructured input state via Jev System One.
+//
+// These options annotate Protobuf messages to specify how fields map to Jev's three core primitives:
+//   - Choice: Discrete selection among predefined criteria (mapped to enums, oneofs, or string whitelists).
+//   - Score:  Numerical evaluation against an ordered scale or rubric (mapped to floats or ints).
+//   - Noul:   Binary yes/no classification returning truth probability (mapped to booleans).
+//
+// For details on TypeSafe AI and Jev System One architecture:
+//   - TypeSafe AI: https://typesafe.ai
+//   - Documentation: https://docs.typesafe.ai
 
 package jevv1
 
@@ -24,18 +44,35 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// FieldOptions specifies how an individual Protobuf field is evaluated by Jev System One.
+//
+// See: https://docs.typesafe.ai (TypeSafe AI Jev Concept Overview)
 type FieldOptions struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Explicit instructions / prompt for Jev to evaluate this field.
-	// If omitted, the field's Protobuf doc comment is used.
+	// Explicit prompt instructions for Jev when evaluating this question.
+	//
+	// Jev uses these instructions as natural language guidance for the cognitive evaluation.
+	// If omitted, the field's leading Protobuf doc comment is used as the instructions.
+	//
+	// See: https://docs.typesafe.ai/primitives (Question Instructions)
 	Instructions string `protobuf:"bytes,1,opt,name=instructions,proto3" json:"instructions,omitempty"`
-	// If true, Jev will skip evaluating this field (e.g. for freeform text, IDs, or downstream fields).
+	// If true, Jev skips this field entirely during question generation.
+	// Useful for fields populated by downstream systems, entity IDs, or freeform text.
 	Skip bool `protobuf:"varint,2,opt,name=skip,proto3" json:"skip,omitempty"`
-	// Rules configuring a Jev Choice question (discrete selection).
+	// Configuration rules for a [Jev Choice primitive](https://docs.typesafe.ai/primitives/choice) question.
+	//
+	// A Choice question selects exactly one option from a discrete set of candidates
+	// (up to 255 options) and returns the chosen value with associated confidence probabilities.
 	Choice *ChoiceRules `protobuf:"bytes,3,opt,name=choice,proto3" json:"choice,omitempty"`
-	// Rules configuring a Jev Score question (evaluation rubric / scale).
+	// Configuration rules for a [Jev Score primitive](https://docs.typesafe.ai/primitives/score) question.
+	//
+	// A Score question rates the input state against an ordered numerical rubric scale
+	// and returns a probability-weighted score.
 	Score *ScoreRules `protobuf:"bytes,4,opt,name=score,proto3" json:"score,omitempty"`
-	// Rules configuring a Jev Noul question (binary yes/no classification).
+	// Configuration rules for a [Jev Noul primitive](https://docs.typesafe.ai/primitives/noul) question.
+	//
+	// A Noul question performs binary yes/no classification, evaluating whether a statement
+	// or condition holds true based on the provided instructions, returning a calibrated probability.
 	Noul          *NoulRules `protobuf:"bytes,5,opt,name=noul,proto3" json:"noul,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -106,15 +143,15 @@ func (x *FieldOptions) GetNoul() *NoulRules {
 	return nil
 }
 
-// ChoiceRules configures a Jev Choice question.
+// ChoiceRules configures a Jev Choice question (discrete categorical classification).
 type ChoiceRules struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Explicit whitelist of allowed choice values (for strings or enums).
+	// Explicit whitelist of allowed choice values for string or enum fields.
+	// When set on an enum, only listed enum values will be included in the Jev choice criteria.
 	Choices []string `protobuf:"bytes,1,rep,name=choices,proto3" json:"choices,omitempty"`
-	// Blacklist of enum value names to exclude from choices.
+	// Blacklist of enum value names to exclude from Jev choice criteria (e.g. legacy or internal variants).
 	NotIn []string `protobuf:"bytes,2,rep,name=not_in,json=notIn,proto3" json:"not_in,omitempty"`
-	// Guidance or descriptive rubric criteria attached to specific options (label -> description).
-	// When specified on a string field without 'choices', the map keys define the allowed choices.
+	// [Rubric or descriptive guidance](https://docs.typesafe.ai/primitives) mapped to specific choice options (label -> description).
 	Criteria      map[string]string `protobuf:"bytes,3,rep,name=criteria,proto3" json:"criteria,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -171,14 +208,19 @@ func (x *ChoiceRules) GetCriteria() map[string]string {
 	return nil
 }
 
-// ScoreRules configures a Jev Score question.
+// ScoreRules configures a Jev Score question (numerical scale / rubric evaluation).
+//
+// Models quantitative ratings and confidence assessments along an ordered scale.
+//
+// See: https://docs.typesafe.ai/primitives/score (Score Question Specification)
 type ScoreRules struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Minimum value of the evaluation rubric scale (default: 0.0).
 	Min float32 `protobuf:"fixed32,1,opt,name=min,proto3" json:"min,omitempty"`
 	// Maximum value of the evaluation rubric scale (default: 100.0).
 	Max float32 `protobuf:"fixed32,2,opt,name=max,proto3" json:"max,omitempty"`
-	// Explicit discrete scale points / rubric tiers (e.g. [1, 2, 3] or [10, 20, 50, 100] or [0.2, 0.5, 0.8]).
+	// Explicit discrete scale points or rubric tiers (e.g. [1, 2, 3, 4, 5] or [0.0, 25.0, 50.0, 75.0, 100.0]).
+	// When specified, Jev scores against these exact discrete rubric values.
 	Scale         []float32 `protobuf:"fixed32,3,rep,packed,name=scale,proto3" json:"scale,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -235,10 +277,15 @@ func (x *ScoreRules) GetScale() []float32 {
 	return nil
 }
 
-// NoulRules configures a Jev Noul question.
+// NoulRules configures a Jev Noul question (binary yes/no condition classification).
+//
+// Models binary boolean assertions, risk flags, and safety gates.
+//
+// See: https://docs.typesafe.ai/primitives/noul (Noul Question Specification)
 type NoulRules struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Confidence threshold [0.0 - 1.0] required to evaluate as true.
+	// Confidence threshold [0.0 - 1.0] required for the condition to evaluate as true.
+	// Default is 0.5.
 	Threshold     float32 `protobuf:"fixed32,1,opt,name=threshold,proto3" json:"threshold,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -285,16 +332,18 @@ var file_jev_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
 		ExtensionType: (*FieldOptions)(nil),
-		Field:         50001,
+		Field:         72341,
 		Name:          "jev.v1.field",
-		Tag:           "bytes,50001,opt,name=field",
+		Tag:           "bytes,72341,opt,name=field",
 		Filename:      "jev/v1/options.proto",
 	},
 }
 
 // Extension fields to descriptorpb.FieldOptions.
 var (
-	// optional jev.v1.FieldOptions field = 50001;
+	// Annotation extending Protobuf field definitions with Jev evaluation directives.
+	//
+	// optional jev.v1.FieldOptions field = 72341;
 	E_Field = &file_jev_v1_options_proto_extTypes[0]
 )
 
@@ -323,7 +372,7 @@ const file_jev_v1_options_proto_rawDesc = "" +
 	"\x05scale\x18\x03 \x03(\x02R\x05scale\")\n" +
 	"\tNoulRules\x12\x1c\n" +
 	"\tthreshold\x18\x01 \x01(\x02R\tthreshold:K\n" +
-	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\v2\x14.jev.v1.FieldOptionsR\x05fieldB7Z5github.com/sudorandom/protoc-gen-jev/pkg/jev/v1;jevv1b\x06proto3"
+	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18\x95\xb5\x04 \x01(\v2\x14.jev.v1.FieldOptionsR\x05fieldB7Z5github.com/sudorandom/protoc-gen-jev/pkg/jev/v1;jevv1b\x06proto3"
 
 var (
 	file_jev_v1_options_proto_rawDescOnce sync.Once

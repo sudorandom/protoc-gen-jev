@@ -1,0 +1,2 @@
+typesafe-sdk
+testcontainers>=4.9.0

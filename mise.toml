@@ -6,6 +6,7 @@ python = "3.14.7"
 node = "26.10.0"
 goreleaser = "latest"
 golangci-lint = "latest"
+uv = "latest"
 
 [env]
 TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE = "/var/run/docker.sock"
