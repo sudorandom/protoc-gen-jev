@@ -9,6 +9,7 @@ golangci-lint = "latest"
 uv = "latest"
 protobuf = "29.3"
 "npm:@bufbuild/protoc-gen-es" = "latest"
+"go:google.golang.org/protobuf/cmd/protoc-gen-go" = "latest"
 
 [env]
 TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE = "/var/run/docker.sock"
