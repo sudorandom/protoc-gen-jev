@@ -15,7 +15,7 @@ import (
 )
 
 // ProcessMessage parses a single Protobuf message into a Jev MessageSpec.
-func ProcessMessage(msg *protogen.Message) model.MessageSpec {
+func ProcessMessage(msg *protogen.Message) (model.MessageSpec, error) {
 	spec := model.MessageSpec{
 		MessageName: string(msg.Desc.Name()),
 		Package:     string(msg.Desc.ParentFile().Package()),
@@ -96,23 +96,45 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 			noulRule = jevOpt.GetNoul()
 		}
 
+		// Sanity Check: Ensure no conflicting primitive configurations
+		primitiveCount := 0
+		if choiceRule != nil {
+			primitiveCount++
+		}
+		if scoreRule != nil {
+			primitiveCount++
+		}
+		if noulRule != nil {
+			primitiveCount++
+		}
+		if primitiveCount > 1 {
+			return spec, fmt.Errorf("field %q: cannot specify more than one Jev primitive (choice, score, noul)", desc.FullName())
+		}
+
 		if choiceRule != nil {
 			criteria := resolveExplicitChoiceCriteria(desc, choiceRule)
-			if len(criteria) > 0 {
-				spec.Questions[desc.JSONName()] = model.Question{
-					Type:         model.TypeChoice,
-					Instructions: instructions,
-					Criteria:     criteria,
-					ProtoField:   string(desc.Name()),
-					JSONField:    desc.JSONName(),
-					GoField:      goFieldName,
-				}
-				spec.Order = append(spec.Order, desc.JSONName())
+			if len(criteria) == 0 {
+				return spec, fmt.Errorf("field %q: choice question has no valid choices", desc.FullName())
 			}
+			spec.Questions[desc.JSONName()] = model.Question{
+				Type:         model.TypeChoice,
+				Instructions: instructions,
+				Criteria:     criteria,
+				ProtoField:   string(desc.Name()),
+				JSONField:    desc.JSONName(),
+				GoField:      goFieldName,
+			}
+			spec.Order = append(spec.Order, desc.JSONName())
 			continue
 		}
 
 		if scoreRule != nil {
+			if (scoreRule.Min != 0 || scoreRule.Max != 0) && scoreRule.Min > scoreRule.Max {
+				return spec, fmt.Errorf("field %q: score min (%v) cannot be greater than max (%v)", desc.FullName(), scoreRule.Min, scoreRule.Max)
+			}
+			if len(scoreRule.Scale) > 0 && len(scoreRule.Scale) < 2 {
+				return spec, fmt.Errorf("field %q: score scale must contain at least 2 distinct values", desc.FullName())
+			}
 			var criteria []string
 			if isIntegerKind(desc.Kind()) {
 				criteria = resolveIntCriteria(desc, scoreRule)
@@ -187,7 +209,7 @@ func ProcessMessage(msg *protogen.Message) model.MessageSpec {
 		}
 	}
 
-	return spec
+	return spec, nil
 }
 
 func isIntegerKind(k protoreflect.Kind) bool {
@@ -382,4 +404,116 @@ func ToPascalCase(s string) string {
 		}
 	}
 	return result
+}
+
+// ProcessService parses a Protobuf service into a Jev ServiceSpec.
+func ProcessService(svc *protogen.Service) (model.ServiceSpec, error) {
+	spec := model.ServiceSpec{
+		ServiceName: string(svc.Desc.Name()),
+		Package:     string(svc.Desc.ParentFile().Package()),
+	}
+
+	// Check service-level options
+	var serviceExplicitEnabled *bool
+	if proto.HasExtension(svc.Desc.Options(), jevv1.E_Service) {
+		if opt, ok := proto.GetExtension(svc.Desc.Options(), jevv1.E_Service).(*jevv1.ServiceOptions); ok && opt != nil && opt.Enabled != nil {
+			if !*opt.Enabled {
+				// Explicitly disabled at service level
+				return spec, nil
+			}
+			serviceExplicitEnabled = opt.Enabled
+		}
+	}
+
+	for _, method := range svc.Methods {
+		var methodExplicitEnabled *bool
+		if proto.HasExtension(method.Desc.Options(), jevv1.E_Method) {
+			if opt, ok := proto.GetExtension(method.Desc.Options(), jevv1.E_Method).(*jevv1.MethodOptions); ok && opt != nil && opt.Enabled != nil {
+				if !*opt.Enabled {
+					// Explicitly disabled at method level
+					continue
+				}
+				methodExplicitEnabled = opt.Enabled
+			}
+		}
+
+		isJevMethod := false
+		if methodExplicitEnabled != nil {
+			isJevMethod = *methodExplicitEnabled
+		} else if serviceExplicitEnabled != nil {
+			isJevMethod = *serviceExplicitEnabled
+		} else {
+			// Auto-discovery: check if either request or response message has Jev field options
+			if HasJevFieldOptions(method.Input) || HasJevFieldOptions(method.Output) {
+				isJevMethod = true
+			}
+		}
+
+		if !isJevMethod {
+			continue
+		}
+
+		// Sanity Check 1: Request must have at least one input field
+		if len(method.Input.Fields) == 0 {
+			return spec, fmt.Errorf("method %q: request message %q must have at least one input field to evaluate", method.Desc.FullName(), method.Input.Desc.Name())
+		}
+
+		questionSpec, err := ProcessMessage(method.Output)
+		if err != nil {
+			return spec, fmt.Errorf("method %q: %w", method.Desc.FullName(), err)
+		}
+
+		// Sanity Check 2: Response must have at least one decision question
+		if len(questionSpec.Questions) == 0 {
+			return spec, fmt.Errorf("method %q: response message %q must contain at least one decision field (Choice, Score, or Noul)", method.Desc.FullName(), method.Output.Desc.Name())
+		}
+
+		var inputFields []model.FieldSpec
+		for _, f := range method.Input.Fields {
+			t := "string"
+			switch f.Desc.Kind() {
+			case protoreflect.BoolKind:
+				t = "bool"
+			case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+				t = "int32"
+			case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+				t = "int64"
+			case protoreflect.FloatKind:
+				t = "float32"
+			case protoreflect.DoubleKind:
+				t = "float64"
+			}
+			jsonName := string(f.Desc.Name())
+			inputFields = append(inputFields, model.FieldSpec{
+				Name:     string(f.Desc.Name()),
+				JSONName: jsonName,
+				GoName:   ToPascalCase(jsonName),
+				Type:     t,
+			})
+		}
+
+		mSpec := model.MethodSpec{
+			Name:         string(method.Desc.Name()),
+			InputType:    string(method.Input.Desc.Name()),
+			InputFields:  inputFields,
+			OutputType:   string(method.Output.Desc.Name()),
+			QuestionSpec: questionSpec,
+		}
+		spec.Methods = append(spec.Methods, mSpec)
+	}
+
+	return spec, nil
+}
+
+// HasJevFieldOptions returns true if any field in msg has jev.v1.field extension.
+func HasJevFieldOptions(msg *protogen.Message) bool {
+	if msg == nil {
+		return false
+	}
+	for _, f := range msg.Fields {
+		if proto.HasExtension(f.Desc.Options(), jevv1.E_Field) {
+			return true
+		}
+	}
+	return false
 }

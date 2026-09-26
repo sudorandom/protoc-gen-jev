@@ -32,6 +32,34 @@ extend google.protobuf.FieldOptions {
   FieldOptions field = 72341;
 }
 
+extend google.protobuf.ServiceOptions {
+  // Annotation extending Protobuf service definitions with Jev evaluation directives.
+  ServiceOptions service = 72342;
+}
+
+extend google.protobuf.MethodOptions {
+  // Annotation extending Protobuf method definitions with Jev evaluation directives.
+  MethodOptions method = 72343;
+}
+
+// ServiceOptions specifies how an entire Protobuf service is processed by Jev.
+message ServiceOptions {
+  // Controls Jev code generation for this service.
+  //   - unset (default): Auto-discovers Jev RPCs if request/response types use (jev.v1.field) options.
+  //   - true: Force-enables all RPCs in this service as Jev decision services (enables natural type mappings).
+  //   - false: Explicitly skips this service during code generation.
+  optional bool enabled = 1;
+}
+
+// MethodOptions specifies how an individual RPC method is processed by Jev.
+message MethodOptions {
+  // Controls Jev code generation for this RPC method.
+  //   - unset (default): Auto-discovers if request/response types use (jev.v1.field) options.
+  //   - true: Force-enables this RPC as a Jev decision RPC (enables natural type mappings).
+  //   - false: Explicitly skips this RPC during code generation.
+  optional bool enabled = 1;
+}
+
 // FieldOptions specifies how an individual Protobuf field is evaluated by Jev System One.
 //
 // See: https://docs.typesafe.ai (TypeSafe AI Jev Concept Overview)

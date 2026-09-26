@@ -59,11 +59,11 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 	require.NoError(t, err)
 
 	// Point the generated Jev client to the FauxRPC container
-	client := incidentv1.NewIncidentTriageJevClient("mock-api-key")
+	client := incidentv1.NewIncidentTriageServiceClient("mock-api-key")
 	client.Endpoint = fmt.Sprintf("%s/v1/systemone", endpoint)
 
-	// 1. Test BuildQuestions
-	questions := client.BuildQuestions()
+	// 1. Test BuildTriageQuestions
+	questions := client.BuildTriageQuestions()
 	assert.Len(t, questions, 6)
 	assert.Contains(t, questions, "routing_target")
 	assert.Contains(t, questions, "requiresImmediatePaging")
@@ -72,14 +72,14 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 	assert.Contains(t, questions, "blastRadiusPercentage")
 	assert.Contains(t, questions, "complianceClassification")
 
-	// 2. Test Evaluate against FauxRPC HTTP OpenAPI endpoint
-	state := map[string]any{
-		"incident_id": "INC-9912",
-		"title":       "Database connection pool exhausted",
-		"description": "API latency increased to 4500ms and 500 errors spike to 12%",
+	// 2. Test Triage against FauxRPC HTTP OpenAPI endpoint
+	triageReq := &incidentv1.TriageRequest{
+		IncidentId:  "INC-9912",
+		Title:       "Database connection pool exhausted",
+		Description: "API latency increased to 4500ms and 500 errors spike to 12%",
 	}
 
-	decision, err := client.Evaluate(ctx, state)
+	decision, err := client.Triage(ctx, triageReq)
 	require.NoError(t, err)
 	require.NotNil(t, decision)
 
@@ -91,14 +91,14 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 	assert.InDelta(t, 45.0, decision.BlastRadiusPercentage, 0.001)
 	assert.Equal(t, "INTERNAL_CONFIDENTIAL", decision.ComplianceClassification)
 
-	// 3. Test BatchEvaluate against FauxRPC
-	batchStates := []any{
-		map[string]any{"incident_id": "INC-1", "title": "Crash 1"},
-		map[string]any{"incident_id": "INC-2", "title": "Crash 2"},
-		map[string]any{"incident_id": "INC-3", "title": "Crash 3"},
+	// 3. Test BatchTriage against FauxRPC
+	batchReqs := []*incidentv1.TriageRequest{
+		{IncidentId: "INC-1", Title: "Crash 1"},
+		{IncidentId: "INC-2", Title: "Crash 2"},
+		{IncidentId: "INC-3", Title: "Crash 3"},
 	}
 
-	decisions, err := client.BatchEvaluate(ctx, batchStates)
+	decisions, err := client.BatchTriage(ctx, batchReqs)
 	require.NoError(t, err)
 	require.Len(t, decisions, 3)
 
@@ -109,9 +109,9 @@ func TestIncidentJevClient_WithFauxRPC(t *testing.T) {
 	}
 
 	// 4. Failing test case: Calling an invalid endpoint returns error status
-	invalidClient := incidentv1.NewIncidentTriageJevClient("mock-api-key")
+	invalidClient := incidentv1.NewIncidentTriageServiceClient("mock-api-key")
 	invalidClient.Endpoint = fmt.Sprintf("%s/v1/nonexistent", endpoint)
-	_, err = invalidClient.Evaluate(ctx, state)
+	_, err = invalidClient.Triage(ctx, triageReq)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "404")
 }

@@ -29,6 +29,30 @@ type MessageSpec struct {
 	Order       []string            `json:"order,omitempty"`
 }
 
+// FieldSpec describes a field in an input request message.
+type FieldSpec struct {
+	Name     string `json:"name"`
+	JSONName string `json:"json_name"`
+	GoName   string `json:"go_name"`
+	Type     string `json:"type"`
+}
+
+// MethodSpec represents an RPC method on a Service.
+type MethodSpec struct {
+	Name         string      `json:"name"`
+	InputType    string      `json:"input_type"`
+	InputFields  []FieldSpec `json:"input_fields"`
+	OutputType   string      `json:"output_type"`
+	QuestionSpec MessageSpec `json:"question_spec"`
+}
+
+// ServiceSpec represents a Protobuf service containing Jev RPC methods.
+type ServiceSpec struct {
+	ServiceName string       `json:"service_name"`
+	Package     string       `json:"package"`
+	Methods     []MethodSpec `json:"methods"`
+}
+
 // TargetOptions controls which code generation targets to produce.
 type TargetOptions struct {
 	GenerateJSON       bool

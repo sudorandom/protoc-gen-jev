@@ -14,7 +14,7 @@ enum PriorityLevel {
   PRIORITY_LEVEL_CRITICAL = 4;
 }
 
-message IncidentTriage {
+message TriageResponse {
   // 1. Oneof mutual exclusion -> Jev Choice question
   // Jev selects the single most appropriate routing target based on input context.
   oneof routing_target {
@@ -72,9 +72,19 @@ message IncidentTriage {
       choices: ["PUBLIC", "INTERNAL_CONFIDENTIAL", "RESTRICTED_PII", "PCI_DSS"]
     }
   ];
-
-  // 7. Skipped fields -> Excluded from Jev decision payload
-  // Ideal for freeform logs, identifiers, or downstream output fields.
-  string incident_id = 9 [(jev.v1.field).skip = true];
-  string raw_stack_trace = 10 [(jev.v1.field).skip = true];
 }
+
+// Request context describing an incident to be triaged by Jev.
+message TriageRequest {
+  string incident_id = 1;
+  string title = 2;
+  string description = 3;
+  string raw_logs = 4;
+}
+
+// Service for AI-driven incident triage and routing via Jev.
+service IncidentTriageService {
+  // Evaluates an incident context and returns strongly-typed triage decisions.
+  rpc Triage(TriageRequest) returns (TriageResponse);
+}
+

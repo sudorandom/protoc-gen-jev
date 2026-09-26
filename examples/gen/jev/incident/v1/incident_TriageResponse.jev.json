@@ -1,5 +1,5 @@
 {
-  "message_name": "IncidentTriage",
+  "message_name": "TriageResponse",
   "package": "incident.v1",
   "questions": {
     "blastRadiusPercentage": {

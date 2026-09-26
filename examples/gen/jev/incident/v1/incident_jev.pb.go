@@ -14,8 +14,8 @@ import (
 
 const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"
 
-// IncidentTriageJevDecisions holds structured decisions returned by Jev for IncidentTriage.
-type IncidentTriageJevDecisions struct {
+// TriageResponseJevDecisions holds structured decisions returned by Jev for TriageResponse.
+type TriageResponseJevDecisions struct {
 	RoutingTarget            string  `json:"routing_target"`
 	RequiresImmediatePaging  bool    `json:"requiresImmediatePaging"`
 	Priority                 string  `json:"priority"`
@@ -24,25 +24,25 @@ type IncidentTriageJevDecisions struct {
 	ComplianceClassification string  `json:"complianceClassification"`
 }
 
-// IncidentTriageJevClient is a typed client for evaluating IncidentTriage decisions via Jev.
-type IncidentTriageJevClient struct {
+// TriageResponseJevClient is a typed client for evaluating TriageResponse decisions via Jev.
+type TriageResponseJevClient struct {
 	APIKey     string
 	Endpoint   string
 	HTTPClient *http.Client
 }
 
-func NewIncidentTriageJevClient(apiKey string) *IncidentTriageJevClient {
+func NewTriageResponseJevClient(apiKey string) *TriageResponseJevClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("TYPESAFE_API_KEY")
 	}
-	return &IncidentTriageJevClient{
+	return &TriageResponseJevClient{
 		APIKey:     apiKey,
 		Endpoint:   DefaultJevEndpoint,
 		HTTPClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (c *IncidentTriageJevClient) BuildQuestions() map[string]any {
+func (c *TriageResponseJevClient) BuildQuestions() map[string]any {
 	return map[string]any{
 		"routing_target": map[string]any{
 			"type":         "choice",
@@ -76,7 +76,7 @@ func (c *IncidentTriageJevClient) BuildQuestions() map[string]any {
 	}
 }
 
-func (c *IncidentTriageJevClient) Evaluate(ctx context.Context, state any) (*IncidentTriageJevDecisions, error) {
+func (c *TriageResponseJevClient) Evaluate(ctx context.Context, state any) (*TriageResponseJevDecisions, error) {
 	payload := map[string]any{
 		"state":     state,
 		"questions": c.BuildQuestions(),
@@ -119,7 +119,7 @@ func (c *IncidentTriageJevClient) Evaluate(ctx context.Context, state any) (*Inc
 	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
-	decisions := &IncidentTriageJevDecisions{}
+	decisions := &TriageResponseJevDecisions{}
 	if item, ok := rawResp.Answers["routing_target"]; ok && item.Choice != "" {
 		decisions.RoutingTarget = item.Choice
 	} else if item, ok := rawResp.Choices["routing_target"]; ok {
@@ -159,12 +159,176 @@ func (c *IncidentTriageJevClient) Evaluate(ctx context.Context, state any) (*Inc
 }
 
 // BatchEvaluate evaluates multiple states against Jev sequentially.
-func (c *IncidentTriageJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*IncidentTriageJevDecisions, error) {
-	results := make([]*IncidentTriageJevDecisions, len(states))
+func (c *TriageResponseJevClient) BatchEvaluate(ctx context.Context, states []any) ([]*TriageResponseJevDecisions, error) {
+	results := make([]*TriageResponseJevDecisions, len(states))
 	for i, s := range states {
 		res, err := c.Evaluate(ctx, s)
 		if err != nil {
 			return nil, fmt.Errorf("failed evaluating state at index %d: %w", i, err)
+		}
+		results[i] = res
+	}
+	return results, nil
+}
+
+// TriageRequest represents the input request for Triage.
+type TriageRequest struct {
+	IncidentId  string `json:"incident_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	RawLogs     string `json:"raw_logs"`
+}
+
+// TriageResponse holds structured decisions returned by Jev for Triage.
+type TriageResponse struct {
+	RoutingTarget            string  `json:"routing_target"`
+	RequiresImmediatePaging  bool    `json:"requiresImmediatePaging"`
+	Priority                 string  `json:"priority"`
+	UrgencyRating            float64 `json:"urgencyRating"`
+	BlastRadiusPercentage    float64 `json:"blastRadiusPercentage"`
+	ComplianceClassification string  `json:"complianceClassification"`
+}
+
+// IncidentTriageServiceClient is a typed client for evaluating IncidentTriageService decisions via Jev.
+type IncidentTriageServiceClient struct {
+	APIKey     string
+	Endpoint   string
+	HTTPClient *http.Client
+}
+
+func NewIncidentTriageServiceClient(apiKey string) *IncidentTriageServiceClient {
+	if apiKey == "" {
+		apiKey = os.Getenv("TYPESAFE_API_KEY")
+	}
+	return &IncidentTriageServiceClient{
+		APIKey:     apiKey,
+		Endpoint:   DefaultJevEndpoint,
+		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+func (c *IncidentTriageServiceClient) BuildTriageQuestions() map[string]any {
+	return map[string]any{
+		"routing_target": map[string]any{
+			"type":         "choice",
+			"instructions": "1. Oneof mutual exclusion -> Jev Choice question Jev selects the single most appropriate routing target based on input context.",
+			"criteria":     map[string]any{"automated_runbook": nil, "incident_commander": nil, "oncall_engineer": nil},
+		},
+		"requiresImmediatePaging": map[string]any{
+			"type":         "noul",
+			"instructions": "Does this incident indicate active user-facing outage requiring paging?",
+		},
+		"priority": map[string]any{
+			"type":         "choice",
+			"instructions": "Assess the operational severity and customer blast radius",
+			"criteria":     map[string]any{"PRIORITY_LEVEL_CRITICAL": nil, "PRIORITY_LEVEL_HIGH": nil, "PRIORITY_LEVEL_LOW": nil, "PRIORITY_LEVEL_MEDIUM": nil},
+		},
+		"urgencyRating": map[string]any{
+			"type":         "score",
+			"instructions": "How urgently does this issue need to be resolved?",
+			"criteria":     []string{"1", "2", "3", "4", "5"},
+		},
+		"blastRadiusPercentage": map[string]any{
+			"type":         "score",
+			"instructions": "Estimated percentage of production infrastructure impacted",
+			"criteria":     []string{"0.0", "25.0", "50.0", "75.0", "100.0"},
+		},
+		"complianceClassification": map[string]any{
+			"type":         "choice",
+			"instructions": "Categorize any sensitive or regulated data exposed in the incident report",
+			"criteria":     map[string]any{"INTERNAL_CONFIDENTIAL": nil, "PCI_DSS": nil, "PUBLIC": nil, "RESTRICTED_PII": nil},
+		},
+	}
+}
+
+func (c *IncidentTriageServiceClient) Triage(ctx context.Context, req *TriageRequest) (*TriageResponse, error) {
+	payload := map[string]any{
+		"state":     req,
+		"questions": c.BuildTriageQuestions(),
+	}
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal Jev payload: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
+	resp, err := c.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("Jev request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
+	}
+	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
+		Choices map[string]struct {
+			Choice string `json:"choice"`
+		} `json:"choices"`
+		Nouls map[string]struct {
+			Result bool `json:"result"`
+		} `json:"nouls"`
+		Scores map[string]struct {
+			Score float64 `json:"score"`
+		} `json:"scores"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
+	}
+	decisions := &TriageResponse{}
+	if item, ok := rawResp.Answers["routing_target"]; ok && item.Choice != "" {
+		decisions.RoutingTarget = item.Choice
+	} else if item, ok := rawResp.Choices["routing_target"]; ok {
+		decisions.RoutingTarget = item.Choice
+	}
+	if item, ok := rawResp.Answers["requiresImmediatePaging"]; ok && item.Noul != nil {
+		switch v := item.Noul.(type) {
+		case bool:
+			decisions.RequiresImmediatePaging = v
+		case float64:
+			decisions.RequiresImmediatePaging = v >= 0.5
+		}
+	} else if item, ok := rawResp.Nouls["requiresImmediatePaging"]; ok {
+		decisions.RequiresImmediatePaging = item.Result
+	}
+	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
+		decisions.Priority = item.Choice
+	} else if item, ok := rawResp.Choices["priority"]; ok {
+		decisions.Priority = item.Choice
+	}
+	if item, ok := rawResp.Answers["urgencyRating"]; ok && item.Score != 0 {
+		decisions.UrgencyRating = item.Score
+	} else if item, ok := rawResp.Scores["urgencyRating"]; ok {
+		decisions.UrgencyRating = item.Score
+	}
+	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok && item.Score != 0 {
+		decisions.BlastRadiusPercentage = item.Score
+	} else if item, ok := rawResp.Scores["blastRadiusPercentage"]; ok {
+		decisions.BlastRadiusPercentage = item.Score
+	}
+	if item, ok := rawResp.Answers["complianceClassification"]; ok && item.Choice != "" {
+		decisions.ComplianceClassification = item.Choice
+	} else if item, ok := rawResp.Choices["complianceClassification"]; ok {
+		decisions.ComplianceClassification = item.Choice
+	}
+	return decisions, nil
+}
+
+func (c *IncidentTriageServiceClient) BatchTriage(ctx context.Context, reqs []*TriageRequest) ([]*TriageResponse, error) {
+	results := make([]*TriageResponse, len(reqs))
+	for i, r := range reqs {
+		res, err := c.Triage(ctx, r)
+		if err != nil {
+			return nil, fmt.Errorf("failed evaluating item at index %d: %w", i, err)
 		}
 		results[i] = res
 	}

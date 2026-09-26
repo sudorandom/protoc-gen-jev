@@ -44,6 +44,104 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ServiceOptions specifies how an entire Protobuf service is processed by Jev.
+type ServiceOptions struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Controls Jev code generation for this service.
+	//   - unset (default): Auto-discovers Jev RPCs if request/response types use (jev.v1.field) options.
+	//   - true: Force-enables all RPCs in this service as Jev decision services (enables natural type mappings).
+	//   - false: Explicitly skips this service during code generation.
+	Enabled       *bool `protobuf:"varint,1,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServiceOptions) Reset() {
+	*x = ServiceOptions{}
+	mi := &file_jev_v1_options_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServiceOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServiceOptions) ProtoMessage() {}
+
+func (x *ServiceOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_jev_v1_options_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServiceOptions.ProtoReflect.Descriptor instead.
+func (*ServiceOptions) Descriptor() ([]byte, []int) {
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ServiceOptions) GetEnabled() bool {
+	if x != nil && x.Enabled != nil {
+		return *x.Enabled
+	}
+	return false
+}
+
+// MethodOptions specifies how an individual RPC method is processed by Jev.
+type MethodOptions struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Controls Jev code generation for this RPC method.
+	//   - unset (default): Auto-discovers if request/response types use (jev.v1.field) options.
+	//   - true: Force-enables this RPC as a Jev decision RPC (enables natural type mappings).
+	//   - false: Explicitly skips this RPC during code generation.
+	Enabled       *bool `protobuf:"varint,1,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MethodOptions) Reset() {
+	*x = MethodOptions{}
+	mi := &file_jev_v1_options_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MethodOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MethodOptions) ProtoMessage() {}
+
+func (x *MethodOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_jev_v1_options_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MethodOptions.ProtoReflect.Descriptor instead.
+func (*MethodOptions) Descriptor() ([]byte, []int) {
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MethodOptions) GetEnabled() bool {
+	if x != nil && x.Enabled != nil {
+		return *x.Enabled
+	}
+	return false
+}
+
 // FieldOptions specifies how an individual Protobuf field is evaluated by Jev System One.
 //
 // See: https://docs.typesafe.ai (TypeSafe AI Jev Concept Overview)
@@ -80,7 +178,7 @@ type FieldOptions struct {
 
 func (x *FieldOptions) Reset() {
 	*x = FieldOptions{}
-	mi := &file_jev_v1_options_proto_msgTypes[0]
+	mi := &file_jev_v1_options_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -92,7 +190,7 @@ func (x *FieldOptions) String() string {
 func (*FieldOptions) ProtoMessage() {}
 
 func (x *FieldOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_jev_v1_options_proto_msgTypes[0]
+	mi := &file_jev_v1_options_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -105,7 +203,7 @@ func (x *FieldOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FieldOptions.ProtoReflect.Descriptor instead.
 func (*FieldOptions) Descriptor() ([]byte, []int) {
-	return file_jev_v1_options_proto_rawDescGZIP(), []int{0}
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *FieldOptions) GetInstructions() string {
@@ -159,7 +257,7 @@ type ChoiceRules struct {
 
 func (x *ChoiceRules) Reset() {
 	*x = ChoiceRules{}
-	mi := &file_jev_v1_options_proto_msgTypes[1]
+	mi := &file_jev_v1_options_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -171,7 +269,7 @@ func (x *ChoiceRules) String() string {
 func (*ChoiceRules) ProtoMessage() {}
 
 func (x *ChoiceRules) ProtoReflect() protoreflect.Message {
-	mi := &file_jev_v1_options_proto_msgTypes[1]
+	mi := &file_jev_v1_options_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -184,7 +282,7 @@ func (x *ChoiceRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChoiceRules.ProtoReflect.Descriptor instead.
 func (*ChoiceRules) Descriptor() ([]byte, []int) {
-	return file_jev_v1_options_proto_rawDescGZIP(), []int{1}
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ChoiceRules) GetChoices() []string {
@@ -228,7 +326,7 @@ type ScoreRules struct {
 
 func (x *ScoreRules) Reset() {
 	*x = ScoreRules{}
-	mi := &file_jev_v1_options_proto_msgTypes[2]
+	mi := &file_jev_v1_options_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -240,7 +338,7 @@ func (x *ScoreRules) String() string {
 func (*ScoreRules) ProtoMessage() {}
 
 func (x *ScoreRules) ProtoReflect() protoreflect.Message {
-	mi := &file_jev_v1_options_proto_msgTypes[2]
+	mi := &file_jev_v1_options_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -253,7 +351,7 @@ func (x *ScoreRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScoreRules.ProtoReflect.Descriptor instead.
 func (*ScoreRules) Descriptor() ([]byte, []int) {
-	return file_jev_v1_options_proto_rawDescGZIP(), []int{2}
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ScoreRules) GetMin() float32 {
@@ -293,7 +391,7 @@ type NoulRules struct {
 
 func (x *NoulRules) Reset() {
 	*x = NoulRules{}
-	mi := &file_jev_v1_options_proto_msgTypes[3]
+	mi := &file_jev_v1_options_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -305,7 +403,7 @@ func (x *NoulRules) String() string {
 func (*NoulRules) ProtoMessage() {}
 
 func (x *NoulRules) ProtoReflect() protoreflect.Message {
-	mi := &file_jev_v1_options_proto_msgTypes[3]
+	mi := &file_jev_v1_options_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -318,7 +416,7 @@ func (x *NoulRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NoulRules.ProtoReflect.Descriptor instead.
 func (*NoulRules) Descriptor() ([]byte, []int) {
-	return file_jev_v1_options_proto_rawDescGZIP(), []int{3}
+	return file_jev_v1_options_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *NoulRules) GetThreshold() float32 {
@@ -337,6 +435,22 @@ var file_jev_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
 		Tag:           "bytes,72341,opt,name=field",
 		Filename:      "jev/v1/options.proto",
 	},
+	{
+		ExtendedType:  (*descriptorpb.ServiceOptions)(nil),
+		ExtensionType: (*ServiceOptions)(nil),
+		Field:         72342,
+		Name:          "jev.v1.service",
+		Tag:           "bytes,72342,opt,name=service",
+		Filename:      "jev/v1/options.proto",
+	},
+	{
+		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
+		ExtensionType: (*MethodOptions)(nil),
+		Field:         72343,
+		Name:          "jev.v1.method",
+		Tag:           "bytes,72343,opt,name=method",
+		Filename:      "jev/v1/options.proto",
+	},
 }
 
 // Extension fields to descriptorpb.FieldOptions.
@@ -347,11 +461,35 @@ var (
 	E_Field = &file_jev_v1_options_proto_extTypes[0]
 )
 
+// Extension fields to descriptorpb.ServiceOptions.
+var (
+	// Annotation extending Protobuf service definitions with Jev evaluation directives.
+	//
+	// optional jev.v1.ServiceOptions service = 72342;
+	E_Service = &file_jev_v1_options_proto_extTypes[1]
+)
+
+// Extension fields to descriptorpb.MethodOptions.
+var (
+	// Annotation extending Protobuf method definitions with Jev evaluation directives.
+	//
+	// optional jev.v1.MethodOptions method = 72343;
+	E_Method = &file_jev_v1_options_proto_extTypes[2]
+)
+
 var File_jev_v1_options_proto protoreflect.FileDescriptor
 
 const file_jev_v1_options_proto_rawDesc = "" +
 	"\n" +
-	"\x14jev/v1/options.proto\x12\x06jev.v1\x1a google/protobuf/descriptor.proto\"\xc4\x01\n" +
+	"\x14jev/v1/options.proto\x12\x06jev.v1\x1a google/protobuf/descriptor.proto\";\n" +
+	"\x0eServiceOptions\x12\x1d\n" +
+	"\aenabled\x18\x01 \x01(\bH\x00R\aenabled\x88\x01\x01B\n" +
+	"\n" +
+	"\b_enabled\":\n" +
+	"\rMethodOptions\x12\x1d\n" +
+	"\aenabled\x18\x01 \x01(\bH\x00R\aenabled\x88\x01\x01B\n" +
+	"\n" +
+	"\b_enabled\"\xc4\x01\n" +
 	"\fFieldOptions\x12\"\n" +
 	"\finstructions\x18\x01 \x01(\tR\finstructions\x12\x12\n" +
 	"\x04skip\x18\x02 \x01(\bR\x04skip\x12+\n" +
@@ -372,7 +510,9 @@ const file_jev_v1_options_proto_rawDesc = "" +
 	"\x05scale\x18\x03 \x03(\x02R\x05scale\")\n" +
 	"\tNoulRules\x12\x1c\n" +
 	"\tthreshold\x18\x01 \x01(\x02R\tthreshold:K\n" +
-	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18\x95\xb5\x04 \x01(\v2\x14.jev.v1.FieldOptionsR\x05fieldB7Z5github.com/sudorandom/protoc-gen-jev/pkg/jev/v1;jevv1b\x06proto3"
+	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18\x95\xb5\x04 \x01(\v2\x14.jev.v1.FieldOptionsR\x05field:S\n" +
+	"\aservice\x12\x1f.google.protobuf.ServiceOptions\x18\x96\xb5\x04 \x01(\v2\x16.jev.v1.ServiceOptionsR\aservice:O\n" +
+	"\x06method\x12\x1e.google.protobuf.MethodOptions\x18\x97\xb5\x04 \x01(\v2\x15.jev.v1.MethodOptionsR\x06methodB7Z5github.com/sudorandom/protoc-gen-jev/pkg/jev/v1;jevv1b\x06proto3"
 
 var (
 	file_jev_v1_options_proto_rawDescOnce sync.Once
@@ -386,27 +526,35 @@ func file_jev_v1_options_proto_rawDescGZIP() []byte {
 	return file_jev_v1_options_proto_rawDescData
 }
 
-var file_jev_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_jev_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_jev_v1_options_proto_goTypes = []any{
-	(*FieldOptions)(nil),              // 0: jev.v1.FieldOptions
-	(*ChoiceRules)(nil),               // 1: jev.v1.ChoiceRules
-	(*ScoreRules)(nil),                // 2: jev.v1.ScoreRules
-	(*NoulRules)(nil),                 // 3: jev.v1.NoulRules
-	nil,                               // 4: jev.v1.ChoiceRules.CriteriaEntry
-	(*descriptorpb.FieldOptions)(nil), // 5: google.protobuf.FieldOptions
+	(*ServiceOptions)(nil),              // 0: jev.v1.ServiceOptions
+	(*MethodOptions)(nil),               // 1: jev.v1.MethodOptions
+	(*FieldOptions)(nil),                // 2: jev.v1.FieldOptions
+	(*ChoiceRules)(nil),                 // 3: jev.v1.ChoiceRules
+	(*ScoreRules)(nil),                  // 4: jev.v1.ScoreRules
+	(*NoulRules)(nil),                   // 5: jev.v1.NoulRules
+	nil,                                 // 6: jev.v1.ChoiceRules.CriteriaEntry
+	(*descriptorpb.FieldOptions)(nil),   // 7: google.protobuf.FieldOptions
+	(*descriptorpb.ServiceOptions)(nil), // 8: google.protobuf.ServiceOptions
+	(*descriptorpb.MethodOptions)(nil),  // 9: google.protobuf.MethodOptions
 }
 var file_jev_v1_options_proto_depIdxs = []int32{
-	1, // 0: jev.v1.FieldOptions.choice:type_name -> jev.v1.ChoiceRules
-	2, // 1: jev.v1.FieldOptions.score:type_name -> jev.v1.ScoreRules
-	3, // 2: jev.v1.FieldOptions.noul:type_name -> jev.v1.NoulRules
-	4, // 3: jev.v1.ChoiceRules.criteria:type_name -> jev.v1.ChoiceRules.CriteriaEntry
-	5, // 4: jev.v1.field:extendee -> google.protobuf.FieldOptions
-	0, // 5: jev.v1.field:type_name -> jev.v1.FieldOptions
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	5, // [5:6] is the sub-list for extension type_name
-	4, // [4:5] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	3,  // 0: jev.v1.FieldOptions.choice:type_name -> jev.v1.ChoiceRules
+	4,  // 1: jev.v1.FieldOptions.score:type_name -> jev.v1.ScoreRules
+	5,  // 2: jev.v1.FieldOptions.noul:type_name -> jev.v1.NoulRules
+	6,  // 3: jev.v1.ChoiceRules.criteria:type_name -> jev.v1.ChoiceRules.CriteriaEntry
+	7,  // 4: jev.v1.field:extendee -> google.protobuf.FieldOptions
+	8,  // 5: jev.v1.service:extendee -> google.protobuf.ServiceOptions
+	9,  // 6: jev.v1.method:extendee -> google.protobuf.MethodOptions
+	2,  // 7: jev.v1.field:type_name -> jev.v1.FieldOptions
+	0,  // 8: jev.v1.service:type_name -> jev.v1.ServiceOptions
+	1,  // 9: jev.v1.method:type_name -> jev.v1.MethodOptions
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	7,  // [7:10] is the sub-list for extension type_name
+	4,  // [4:7] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_jev_v1_options_proto_init() }
@@ -414,14 +562,16 @@ func file_jev_v1_options_proto_init() {
 	if File_jev_v1_options_proto != nil {
 		return
 	}
+	file_jev_v1_options_proto_msgTypes[0].OneofWrappers = []any{}
+	file_jev_v1_options_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_jev_v1_options_proto_rawDesc), len(file_jev_v1_options_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
-			NumExtensions: 1,
+			NumMessages:   7,
+			NumExtensions: 3,
 			NumServices:   0,
 		},
 		GoTypes:           file_jev_v1_options_proto_goTypes,

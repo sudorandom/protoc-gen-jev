@@ -23,6 +23,13 @@ generate: build
 	buf generate --template examples/buf.gen.yaml examples/proto
 	@echo "✔ Code generation complete."
 
+# Re-generate Go bindings for jev/v1 options
+generate-options:
+	@echo "Regenerating Go bindings for jev/v1/options.proto..."
+	buf generate proto --template '{"version":"v2","plugins":[{"local":"protoc-gen-go","out":".","opt":["module=github.com/sudorandom/protoc-gen-jev"]}]}'
+	@echo "✔ Options bindings regenerated."
+
+
 # ------------------------------------------------------------------------------
 # Testing & Golden Files
 # ------------------------------------------------------------------------------
@@ -63,16 +70,36 @@ test: generate test-syntax compile-examples
 
 # Run real end-to-end examples across all languages (Go, Python, TypeScript)
 run-examples: compile-examples
-	@echo "=== Running Go Example ==="
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [ -z "${TYPESAFE_API_KEY:-}" ] && [ -z "${JEV_ENDPOINT:-}" ]; then
+		echo "[INFO] Neither TYPESAFE_API_KEY nor JEV_ENDPOINT is set."
+		echo "[INFO] Starting temporary FauxRPC mock container on port 6660..."
+		CID=$(docker run -d --rm -p 6660:6660 -v "{{ justfile_directory() }}/testdata/openapi:/openapi:ro" docker.io/sudorandom/fauxrpc:v0.29.1 run --schema=/openapi/typesafe-jev.yaml --stubs=/openapi/stubs.jev.yaml --addr=0.0.0.0:6660)
+		cleanup() {
+			echo "[INFO] Stopping FauxRPC mock container..."
+			docker stop "$CID" >/dev/null 2>&1 || true
+		}
+		trap cleanup EXIT INT TERM
+		for i in {1..30}; do
+			if curl -sf http://localhost:6660/fauxrpc/openapi-docs/ >/dev/null; then
+				break
+			fi
+			sleep 0.2
+		done
+		export JEV_ENDPOINT="http://localhost:6660/v1/systemone"
+	fi
+
+	echo "=== Running Go Example ==="
 	go run examples/go/main.go
-	@echo ""
-	@echo "=== Running Python Example ==="
+	echo ""
+	echo "=== Running Python Example ==="
 	uv run python examples/python/main.py
-	@echo ""
-	@echo "=== Running TypeScript Example ==="
+	echo ""
+	echo "=== Running TypeScript Example ==="
 	NODE_PATH="{{ justfile_directory() }}/examples/typescript/node_modules" npx --prefix examples/typescript tsx examples/typescript/index.ts
-	@echo ""
-	@echo "✔ All language examples completed successfully!"
+	echo ""
+	echo "✔ All language examples completed successfully!"
 
 # Setup local Laya environment in .venv-laya
 setup-laya:

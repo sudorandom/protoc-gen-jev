@@ -11,7 +11,7 @@ import (
 )
 
 // GenerateGo writes native Go client wrappers into <file>_jev.pb.go.
-func GenerateGo(gen *protogen.Plugin, file *protogen.File, specs []model.MessageSpec) {
+func GenerateGo(gen *protogen.Plugin, file *protogen.File, specs []model.MessageSpec, serviceSpecs []model.ServiceSpec) {
 	filename := fmt.Sprintf("%s_jev.pb.go", file.GeneratedFilenamePrefix)
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
 
@@ -31,6 +31,8 @@ func GenerateGo(gen *protogen.Plugin, file *protogen.File, specs []model.Message
 	g.P()
 	g.P(`const DefaultJevEndpoint = "https://api.typesafe.ai/v1/systemone"`)
 	g.P()
+
+	generatedStructs := make(map[string]bool)
 
 	for _, spec := range specs {
 		clientName := fmt.Sprintf("%sJevClient", spec.MessageName)
@@ -207,8 +209,203 @@ func GenerateGo(gen *protogen.Plugin, file *protogen.File, specs []model.Message
 		g.P("		}")
 		g.P("		results[i] = res")
 		g.P("	}")
+		generatedStructs[decisionsName] = true
 		g.P("	return results, nil")
 		g.P("}")
 		g.P()
+	}
+
+	for _, svc := range serviceSpecs {
+		// 1. Generate request and response structs for each method
+		for _, m := range svc.Methods {
+			if !generatedStructs[m.InputType] {
+				generatedStructs[m.InputType] = true
+				g.P(fmt.Sprintf("// %s represents the input request for %s.", m.InputType, m.Name))
+				g.P(fmt.Sprintf("type %s struct {", m.InputType))
+				for _, f := range m.InputFields {
+					g.P(fmt.Sprintf("	%s %s `json:%q`", f.GoName, f.Type, f.JSONName))
+				}
+				g.P("}")
+				g.P()
+			}
+
+			if !generatedStructs[m.OutputType] {
+				generatedStructs[m.OutputType] = true
+				g.P(fmt.Sprintf("// %s holds structured decisions returned by Jev for %s.", m.OutputType, m.Name))
+				g.P(fmt.Sprintf("type %s struct {", m.OutputType))
+				for _, name := range m.QuestionSpec.Order {
+					q := m.QuestionSpec.Questions[name]
+					switch q.Type {
+					case model.TypeChoice:
+						g.P(fmt.Sprintf("	%s string `json:%q`", q.GoField, q.JSONField))
+					case model.TypeNoul:
+						g.P(fmt.Sprintf("	%s bool `json:%q`", q.GoField, q.JSONField))
+					case model.TypeScore:
+						g.P(fmt.Sprintf("	%s float64 `json:%q`", q.GoField, q.JSONField))
+					}
+				}
+				g.P("}")
+				g.P()
+			}
+		}
+
+		clientName := fmt.Sprintf("%sClient", svc.ServiceName)
+		g.P(fmt.Sprintf("// %s is a typed client for evaluating %s decisions via Jev.", clientName, svc.ServiceName))
+		g.P(fmt.Sprintf("type %s struct {", clientName))
+		g.P("	APIKey     string")
+		g.P("	Endpoint   string")
+		g.P("	HTTPClient *http.Client")
+		g.P("}")
+		g.P()
+
+		g.P(fmt.Sprintf("func New%s(apiKey string) *%s {", clientName, clientName))
+		g.P("	if apiKey == \"\" {")
+		g.P(`		apiKey = os.Getenv("TYPESAFE_API_KEY")`)
+		g.P("	}")
+		g.P(fmt.Sprintf("	return &%s{", clientName))
+		g.P("		APIKey:     apiKey,")
+		g.P("		Endpoint:   DefaultJevEndpoint,")
+		g.P("		HTTPClient: &http.Client{Timeout: 10 * time.Second},")
+		g.P("	}")
+		g.P("}")
+		g.P()
+
+		for _, m := range svc.Methods {
+			buildQuestionsName := fmt.Sprintf("Build%sQuestions", m.Name)
+			g.P(fmt.Sprintf("func (c *%s) %s() map[string]any {", clientName, buildQuestionsName))
+			g.P("	return map[string]any{")
+			for _, jsonName := range m.QuestionSpec.Order {
+				q := m.QuestionSpec.Questions[jsonName]
+				switch q.Type {
+				case model.TypeChoice:
+					var criteriaPairs []string
+					if mp, ok := q.Criteria.(map[string]any); ok {
+						var keys []string
+						for k := range mp {
+							keys = append(keys, k)
+						}
+						sort.Strings(keys)
+						for _, k := range keys {
+							criteriaPairs = append(criteriaPairs, fmt.Sprintf("%q: nil", k))
+						}
+					}
+					g.P(fmt.Sprintf("		%q: map[string]any{", jsonName))
+					g.P(`			"type": "choice",`)
+					g.P(fmt.Sprintf("			\"instructions\": %q,", q.Instructions))
+					g.P(fmt.Sprintf("			\"criteria\": map[string]any{%s},", strings.Join(criteriaPairs, ", ")))
+					g.P("		},")
+				case model.TypeNoul:
+					g.P(fmt.Sprintf("		%q: map[string]any{", jsonName))
+					g.P(`			"type": "noul",`)
+					g.P(fmt.Sprintf("			\"instructions\": %q,", q.Instructions))
+					g.P("		},")
+				case model.TypeScore:
+					var items []string
+					if arr, ok := q.Criteria.([]string); ok {
+						for _, item := range arr {
+							items = append(items, fmt.Sprintf("%q", item))
+						}
+					}
+					g.P(fmt.Sprintf("		%q: map[string]any{", jsonName))
+					g.P(`			"type": "score",`)
+					g.P(fmt.Sprintf("			\"instructions\": %q,", q.Instructions))
+					g.P(fmt.Sprintf("			\"criteria\": []string{%s},", strings.Join(items, ", ")))
+					g.P("		},")
+				}
+			}
+			g.P("	}")
+			g.P("}")
+			g.P()
+
+			g.P(fmt.Sprintf("func (c *%s) %s(ctx context.Context, req *%s) (*%s, error) {", clientName, m.Name, m.InputType, m.OutputType))
+			g.P("	payload := map[string]any{")
+			g.P(`		"state":     req,`)
+			g.P(fmt.Sprintf("		\"questions\": c.%s(),", buildQuestionsName))
+			g.P("	}")
+			g.P("	bodyBytes, err := json.Marshal(payload)")
+			g.P("	if err != nil {")
+			g.P("		return nil, fmt.Errorf(\"failed to marshal Jev payload: %w\", err)")
+			g.P("	}")
+			g.P("	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(bodyBytes))")
+			g.P("	if err != nil {")
+			g.P("		return nil, err")
+			g.P("	}")
+			g.P(`	httpReq.Header.Set("Content-Type", "application/json")`)
+			g.P(`	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)`)
+			g.P("	resp, err := c.HTTPClient.Do(httpReq)")
+			g.P("	if err != nil {")
+			g.P("		return nil, fmt.Errorf(\"Jev request failed: %w\", err)")
+			g.P("	}")
+			g.P("	defer resp.Body.Close()")
+			g.P("	if resp.StatusCode != http.StatusOK {")
+			g.P("		b, _ := io.ReadAll(resp.Body)")
+			g.P("		return nil, fmt.Errorf(\"Jev API returned error status %d: %s\", resp.StatusCode, string(b))")
+			g.P("	}")
+			g.P("	var rawResp struct {")
+			g.P("		Answers map[string]struct {")
+			g.P("			Choice string  `json:\"choice\"`")
+			g.P("			Noul   any     `json:\"noul\"`")
+			g.P("			Score  float64 `json:\"score\"`")
+			g.P("		} `json:\"answers\"`")
+			g.P("		Choices map[string]struct {")
+			g.P("			Choice string `json:\"choice\"`")
+			g.P("		} `json:\"choices\"`")
+			g.P("		Nouls map[string]struct {")
+			g.P("			Result bool `json:\"result\"`")
+			g.P("		} `json:\"nouls\"`")
+			g.P("		Scores map[string]struct {")
+			g.P("			Score float64 `json:\"score\"`")
+			g.P("		} `json:\"scores\"`")
+			g.P("	}")
+			g.P("	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {")
+			g.P("		return nil, fmt.Errorf(\"failed to decode Jev response: %w\", err)")
+			g.P("	}")
+			g.P(fmt.Sprintf("	decisions := &%s{}", m.OutputType))
+			for _, name := range m.QuestionSpec.Order {
+				q := m.QuestionSpec.Questions[name]
+				switch q.Type {
+				case model.TypeChoice:
+					g.P(fmt.Sprintf("	if item, ok := rawResp.Answers[%q]; ok && item.Choice != \"\" {", q.JSONField))
+					g.P(fmt.Sprintf("		decisions.%s = item.Choice", q.GoField))
+					g.P(fmt.Sprintf("	} else if item, ok := rawResp.Choices[%q]; ok {", q.JSONField))
+					g.P(fmt.Sprintf("		decisions.%s = item.Choice", q.GoField))
+					g.P("	}")
+				case model.TypeNoul:
+					g.P(fmt.Sprintf("	if item, ok := rawResp.Answers[%q]; ok && item.Noul != nil {", q.JSONField))
+					g.P("		switch v := item.Noul.(type) {")
+					g.P("		case bool:")
+					g.P(fmt.Sprintf("			decisions.%s = v", q.GoField))
+					g.P("		case float64:")
+					g.P(fmt.Sprintf("			decisions.%s = v >= 0.5", q.GoField))
+					g.P("		}")
+					g.P(fmt.Sprintf("	} else if item, ok := rawResp.Nouls[%q]; ok {", q.JSONField))
+					g.P(fmt.Sprintf("		decisions.%s = item.Result", q.GoField))
+					g.P("	}")
+				case model.TypeScore:
+					g.P(fmt.Sprintf("	if item, ok := rawResp.Answers[%q]; ok && item.Score != 0 {", q.JSONField))
+					g.P(fmt.Sprintf("		decisions.%s = item.Score", q.GoField))
+					g.P(fmt.Sprintf("	} else if item, ok := rawResp.Scores[%q]; ok {", q.JSONField))
+					g.P(fmt.Sprintf("		decisions.%s = item.Score", q.GoField))
+					g.P("	}")
+				}
+			}
+			g.P("	return decisions, nil")
+			g.P("}")
+			g.P()
+
+			batchMethodName := fmt.Sprintf("Batch%s", m.Name)
+			g.P(fmt.Sprintf("func (c *%s) %s(ctx context.Context, reqs []*%s) ([]*%s, error) {", clientName, batchMethodName, m.InputType, m.OutputType))
+			g.P(fmt.Sprintf("	results := make([]*%s, len(reqs))", m.OutputType))
+			g.P("	for i, r := range reqs {")
+			g.P(fmt.Sprintf("		res, err := c.%s(ctx, r)", m.Name))
+			g.P("		if err != nil {")
+			g.P("			return nil, fmt.Errorf(\"failed evaluating item at index %d: %w\", i, err)")
+			g.P("		}")
+			g.P("		results[i] = res")
+			g.P("	}")
+			g.P("	return results, nil")
+			g.P("}")
+			g.P()
+		}
 	}
 }

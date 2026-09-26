@@ -44,36 +44,50 @@ func main() {
 
 			var specs []model.MessageSpec
 			for _, msg := range f.Messages {
-				spec := parser.ProcessMessage(msg)
+				spec, err := parser.ProcessMessage(msg)
+				if err != nil {
+					return err
+				}
 				if len(spec.Questions) > 0 {
 					specs = append(specs, spec)
 				}
 			}
 
-			if len(specs) == 0 {
+			var serviceSpecs []model.ServiceSpec
+			for _, svc := range f.Services {
+				serviceSpec, err := parser.ProcessService(svc)
+				if err != nil {
+					return err
+				}
+				if len(serviceSpec.Methods) > 0 {
+					serviceSpecs = append(serviceSpecs, serviceSpec)
+				}
+			}
+
+			if len(specs) == 0 && len(serviceSpecs) == 0 {
 				continue
 			}
 
 			// 1. Language-agnostic JSON spec
 			if targetOptions.GenerateJSON {
-				if err := codegen.GenerateJSON(gen, f, specs); err != nil {
+				if err := codegen.GenerateJSON(gen, f, specs, serviceSpecs); err != nil {
 					return err
 				}
 			}
 
 			// 2. Native Go client
 			if targetOptions.GenerateGo {
-				codegen.GenerateGo(gen, f, specs)
+				codegen.GenerateGo(gen, f, specs, serviceSpecs)
 			}
 
 			// 3. TypeScript client
 			if targetOptions.GenerateTypeScript {
-				codegen.GenerateTypeScript(gen, f, specs)
+				codegen.GenerateTypeScript(gen, f, specs, serviceSpecs)
 			}
 
 			// 4. Python client
 			if targetOptions.GeneratePython {
-				codegen.GeneratePython(gen, f, specs)
+				codegen.GeneratePython(gen, f, specs, serviceSpecs)
 			}
 		}
 
