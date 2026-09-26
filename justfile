@@ -74,6 +74,39 @@ run-examples: compile-examples
 	@echo ""
 	@echo "✔ All language examples completed successfully!"
 
+# Setup local Laya environment in .venv-laya
+setup-laya:
+	@if [ ! -d ".venv-laya" ]; then \
+		echo "Creating .venv-laya with Python 3.12..."; \
+		uv venv .venv-laya --python 3.12; \
+	fi
+	@echo "Installing laya[serve]..."
+	uv pip install --python .venv-laya/bin/python "laya[serve]"
+	@echo "✔ Laya environment ready."
+
+# Start local laya-serve in the foreground on port 8000
+start-laya: setup-laya
+	@echo "Starting Laya server on http://127.0.0.1:8000 ..."
+	.venv-laya/bin/laya-serve --host 127.0.0.1 --port 8000
+
+# Run multi-language examples targeting a running local Laya server
+run-examples-laya: compile-examples
+	@echo "Checking Laya server on http://127.0.0.1:8000 ..."
+	@curl -sf http://127.0.0.1:8000/health >/dev/null || (echo "❌ Laya server is not running on :8000. Start it first with 'just start-laya'" && exit 1)
+	@echo "✔ Laya server detected. Executing examples against Laya..."
+	@echo ""
+	@echo "=== Running Go Example against Laya ==="
+	JEV_ENDPOINT="http://127.0.0.1:8000/v1/systemone" go run examples/go/main.go
+	@echo ""
+	@echo "=== Running Python Example against Laya ==="
+	JEV_ENDPOINT="http://127.0.0.1:8000" uv run python examples/python/main.py
+	@echo ""
+	@echo "=== Running TypeScript Example against Laya ==="
+	JEV_ENDPOINT="http://127.0.0.1:8000" NODE_PATH="{{ justfile_directory() }}/examples/typescript/node_modules" npx --prefix examples/typescript tsx examples/typescript/index.ts
+	@echo ""
+	@echo "✔ All language examples completed successfully against Laya!"
+
+
 # Update golden files with newly generated files
 update-golden: generate
 	@echo "Updating golden files..."
@@ -119,5 +152,5 @@ format:
 # Clean build artifacts and generated files
 clean:
 	@echo "Cleaning artifacts..."
-	rm -rf gen/ examples/gen/ protoc-gen-jev .venv/
+	rm -rf gen/ examples/gen/ protoc-gen-jev .venv/ .venv-laya/
 	@echo "✔ Clean complete."

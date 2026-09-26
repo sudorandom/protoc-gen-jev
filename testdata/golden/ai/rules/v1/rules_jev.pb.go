@@ -138,6 +138,11 @@ func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, state any) (*Rul
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -152,40 +157,64 @@ func (c *RuleTestRecordJevClient) Evaluate(ctx context.Context, state any) (*Rul
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &RuleTestRecordJevDecisions{}
-	if item, ok := rawResp.Choices["delivery_method"]; ok {
+	if item, ok := rawResp.Answers["delivery_method"]; ok && item.Choice != "" {
+		decisions.DeliveryMethod = item.Choice
+	} else if item, ok := rawResp.Choices["delivery_method"]; ok {
 		decisions.DeliveryMethod = item.Choice
 	}
-	if item, ok := rawResp.Choices["executionMode"]; ok {
+	if item, ok := rawResp.Answers["executionMode"]; ok && item.Choice != "" {
+		decisions.ExecutionMode = item.Choice
+	} else if item, ok := rawResp.Choices["executionMode"]; ok {
 		decisions.ExecutionMode = item.Choice
 	}
-	if item, ok := rawResp.Choices["filteredMode"]; ok {
+	if item, ok := rawResp.Answers["filteredMode"]; ok && item.Choice != "" {
+		decisions.FilteredMode = item.Choice
+	} else if item, ok := rawResp.Choices["filteredMode"]; ok {
 		decisions.FilteredMode = item.Choice
 	}
-	if item, ok := rawResp.Scores["ratingSmall"]; ok {
+	if item, ok := rawResp.Answers["ratingSmall"]; ok && item.Score != 0 {
+		decisions.RatingSmall = item.Score
+	} else if item, ok := rawResp.Scores["ratingSmall"]; ok {
 		decisions.RatingSmall = item.Score
 	}
-	if item, ok := rawResp.Scores["ratingStrict"]; ok {
+	if item, ok := rawResp.Answers["ratingStrict"]; ok && item.Score != 0 {
+		decisions.RatingStrict = item.Score
+	} else if item, ok := rawResp.Scores["ratingStrict"]; ok {
 		decisions.RatingStrict = item.Score
 	}
-	if item, ok := rawResp.Scores["discreteCode"]; ok {
+	if item, ok := rawResp.Answers["discreteCode"]; ok && item.Score != 0 {
+		decisions.DiscreteCode = item.Score
+	} else if item, ok := rawResp.Scores["discreteCode"]; ok {
 		decisions.DiscreteCode = item.Score
 	}
-	if item, ok := rawResp.Scores["largeScale"]; ok {
+	if item, ok := rawResp.Answers["largeScale"]; ok && item.Score != 0 {
+		decisions.LargeScale = item.Score
+	} else if item, ok := rawResp.Scores["largeScale"]; ok {
 		decisions.LargeScale = item.Score
 	}
-	if item, ok := rawResp.Scores["temperature"]; ok {
+	if item, ok := rawResp.Answers["temperature"]; ok && item.Score != 0 {
+		decisions.Temperature = item.Score
+	} else if item, ok := rawResp.Scores["temperature"]; ok {
 		decisions.Temperature = item.Score
 	}
-	if item, ok := rawResp.Scores["discreteRatio"]; ok {
+	if item, ok := rawResp.Answers["discreteRatio"]; ok && item.Score != 0 {
+		decisions.DiscreteRatio = item.Score
+	} else if item, ok := rawResp.Scores["discreteRatio"]; ok {
 		decisions.DiscreteRatio = item.Score
 	}
-	if item, ok := rawResp.Choices["securityClearance"]; ok {
+	if item, ok := rawResp.Answers["securityClearance"]; ok && item.Choice != "" {
+		decisions.SecurityClearance = item.Choice
+	} else if item, ok := rawResp.Choices["securityClearance"]; ok {
 		decisions.SecurityClearance = item.Choice
 	}
-	if item, ok := rawResp.Choices["decisionFlag"]; ok {
+	if item, ok := rawResp.Answers["decisionFlag"]; ok && item.Choice != "" {
+		decisions.DecisionFlag = item.Choice
+	} else if item, ok := rawResp.Choices["decisionFlag"]; ok {
 		decisions.DecisionFlag = item.Choice
 	}
-	if item, ok := rawResp.Scores["customBoundedScore"]; ok {
+	if item, ok := rawResp.Answers["customBoundedScore"]; ok && item.Score != 0 {
+		decisions.CustomBoundedScore = item.Score
+	} else if item, ok := rawResp.Scores["customBoundedScore"]; ok {
 		decisions.CustomBoundedScore = item.Score
 	}
 	return decisions, nil

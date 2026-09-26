@@ -101,6 +101,11 @@ func (c *IncidentTriageJevClient) Evaluate(ctx context.Context, state any) (*Inc
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -115,22 +120,39 @@ func (c *IncidentTriageJevClient) Evaluate(ctx context.Context, state any) (*Inc
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &IncidentTriageJevDecisions{}
-	if item, ok := rawResp.Choices["routing_target"]; ok {
+	if item, ok := rawResp.Answers["routing_target"]; ok && item.Choice != "" {
+		decisions.RoutingTarget = item.Choice
+	} else if item, ok := rawResp.Choices["routing_target"]; ok {
 		decisions.RoutingTarget = item.Choice
 	}
-	if item, ok := rawResp.Nouls["requiresImmediatePaging"]; ok {
+	if item, ok := rawResp.Answers["requiresImmediatePaging"]; ok && item.Noul != nil {
+		switch v := item.Noul.(type) {
+		case bool:
+			decisions.RequiresImmediatePaging = v
+		case float64:
+			decisions.RequiresImmediatePaging = v >= 0.5
+		}
+	} else if item, ok := rawResp.Nouls["requiresImmediatePaging"]; ok {
 		decisions.RequiresImmediatePaging = item.Result
 	}
-	if item, ok := rawResp.Choices["priority"]; ok {
+	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
+		decisions.Priority = item.Choice
+	} else if item, ok := rawResp.Choices["priority"]; ok {
 		decisions.Priority = item.Choice
 	}
-	if item, ok := rawResp.Scores["urgencyRating"]; ok {
+	if item, ok := rawResp.Answers["urgencyRating"]; ok && item.Score != 0 {
+		decisions.UrgencyRating = item.Score
+	} else if item, ok := rawResp.Scores["urgencyRating"]; ok {
 		decisions.UrgencyRating = item.Score
 	}
-	if item, ok := rawResp.Scores["blastRadiusPercentage"]; ok {
+	if item, ok := rawResp.Answers["blastRadiusPercentage"]; ok && item.Score != 0 {
+		decisions.BlastRadiusPercentage = item.Score
+	} else if item, ok := rawResp.Scores["blastRadiusPercentage"]; ok {
 		decisions.BlastRadiusPercentage = item.Score
 	}
-	if item, ok := rawResp.Choices["complianceClassification"]; ok {
+	if item, ok := rawResp.Answers["complianceClassification"]; ok && item.Choice != "" {
+		decisions.ComplianceClassification = item.Choice
+	} else if item, ok := rawResp.Choices["complianceClassification"]; ok {
 		decisions.ComplianceClassification = item.Choice
 	}
 	return decisions, nil

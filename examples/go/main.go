@@ -20,11 +20,14 @@ func main() {
 	fmt.Println("==================================================")
 
 	apiKey := os.Getenv("TYPESAFE_API_KEY")
+	customEndpoint := os.Getenv("JEV_ENDPOINT")
 	var container testcontainers.Container
 
 	client := incidentv1.NewIncidentTriageJevClient(apiKey)
-
-	if apiKey == "" {
+	if customEndpoint != "" {
+		client.Endpoint = customEndpoint
+		fmt.Printf("\n[INFO] Using custom Jev/Laya endpoint: %s\n", customEndpoint)
+	} else if apiKey == "" {
 		ctx := context.Background()
 
 		absSchemaDir, err := filepath.Abs("testdata/openapi")

@@ -72,6 +72,11 @@ func (c *EntityJevClient) Evaluate(ctx context.Context, state any) (*EntityJevDe
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -86,7 +91,9 @@ func (c *EntityJevClient) Evaluate(ctx context.Context, state any) (*EntityJevDe
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &EntityJevDecisions{}
-	if item, ok := rawResp.Scores["relevance"]; ok {
+	if item, ok := rawResp.Answers["relevance"]; ok && item.Score != 0 {
+		decisions.Relevance = item.Score
+	} else if item, ok := rawResp.Scores["relevance"]; ok {
 		decisions.Relevance = item.Score
 	}
 	return decisions, nil
@@ -163,6 +170,11 @@ func (c *NotificationJevClient) Evaluate(ctx context.Context, state any) (*Notif
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -177,7 +189,9 @@ func (c *NotificationJevClient) Evaluate(ctx context.Context, state any) (*Notif
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &NotificationJevDecisions{}
-	if item, ok := rawResp.Choices["channel"]; ok {
+	if item, ok := rawResp.Answers["channel"]; ok && item.Choice != "" {
+		decisions.Channel = item.Choice
+	} else if item, ok := rawResp.Choices["channel"]; ok {
 		decisions.Channel = item.Choice
 	}
 	return decisions, nil
@@ -259,6 +273,11 @@ func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionI
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -273,10 +292,19 @@ func (c *ActionItemJevClient) Evaluate(ctx context.Context, state any) (*ActionI
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &ActionItemJevDecisions{}
-	if item, ok := rawResp.Choices["priority"]; ok {
+	if item, ok := rawResp.Answers["priority"]; ok && item.Choice != "" {
+		decisions.Priority = item.Choice
+	} else if item, ok := rawResp.Choices["priority"]; ok {
 		decisions.Priority = item.Choice
 	}
-	if item, ok := rawResp.Nouls["requiresImmediateAction"]; ok {
+	if item, ok := rawResp.Answers["requiresImmediateAction"]; ok && item.Noul != nil {
+		switch v := item.Noul.(type) {
+		case bool:
+			decisions.RequiresImmediateAction = v
+		case float64:
+			decisions.RequiresImmediateAction = v >= 0.5
+		}
+	} else if item, ok := rawResp.Nouls["requiresImmediateAction"]; ok {
 		decisions.RequiresImmediateAction = item.Result
 	}
 	return decisions, nil
@@ -359,6 +387,11 @@ func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, state any) (*Ana
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -373,10 +406,14 @@ func (c *AnalysisReportJevClient) Evaluate(ctx context.Context, state any) (*Ana
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &AnalysisReportJevDecisions{}
-	if item, ok := rawResp.Choices["sentiment"]; ok {
+	if item, ok := rawResp.Answers["sentiment"]; ok && item.Choice != "" {
+		decisions.Sentiment = item.Choice
+	} else if item, ok := rawResp.Choices["sentiment"]; ok {
 		decisions.Sentiment = item.Choice
 	}
-	if item, ok := rawResp.Scores["confidenceScore"]; ok {
+	if item, ok := rawResp.Answers["confidenceScore"]; ok && item.Score != 0 {
+		decisions.ConfidenceScore = item.Score
+	} else if item, ok := rawResp.Scores["confidenceScore"]; ok {
 		decisions.ConfidenceScore = item.Score
 	}
 	return decisions, nil

@@ -9,10 +9,19 @@ async function main() {
   console.log("==================================================");
 
   const apiKey = process.env.TYPESAFE_API_KEY;
+  const customEndpoint = process.env.JEV_ENDPOINT;
   let client: IncidentTriageJevClient;
   let container: any;
 
-  if (apiKey) {
+  if (customEndpoint) {
+    const baseURL = customEndpoint.replace(/\/v1\/systemone\/?$/, "").replace(/\/$/, "");
+    console.log(`\n[INFO] Using custom Jev/Laya endpoint: ${baseURL}`);
+    const sdkClient = new TypeSafeClient({
+      apiKey: apiKey ?? "local",
+      baseURL,
+    });
+    client = new IncidentTriageJevClient(sdkClient);
+  } else if (apiKey) {
     console.log("\n[INFO] Using live TypeSafe AI Jev SDK with TYPESAFE_API_KEY");
     client = new IncidentTriageJevClient();
   } else {

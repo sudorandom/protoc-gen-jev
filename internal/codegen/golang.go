@@ -147,6 +147,11 @@ func GenerateGo(gen *protogen.Plugin, file *protogen.File, specs []model.Message
 		g.P("		return nil, fmt.Errorf(\"Jev API returned error status %d: %s\", resp.StatusCode, string(b))")
 		g.P("	}")
 		g.P("	var rawResp struct {")
+		g.P("		Answers map[string]struct {")
+		g.P("			Choice string  `json:\"choice\"`")
+		g.P("			Noul   any     `json:\"noul\"`")
+		g.P("			Score  float64 `json:\"score\"`")
+		g.P("		} `json:\"answers\"`")
 		g.P("		Choices map[string]struct {")
 		g.P("			Choice string `json:\"choice\"`")
 		g.P("		} `json:\"choices\"`")
@@ -165,15 +170,26 @@ func GenerateGo(gen *protogen.Plugin, file *protogen.File, specs []model.Message
 			q := spec.Questions[name]
 			switch q.Type {
 			case model.TypeChoice:
-				g.P(fmt.Sprintf("	if item, ok := rawResp.Choices[%q]; ok {", q.JSONField))
+				g.P(fmt.Sprintf("	if item, ok := rawResp.Answers[%q]; ok && item.Choice != \"\" {", q.JSONField))
+				g.P(fmt.Sprintf("		decisions.%s = item.Choice", q.GoField))
+				g.P(fmt.Sprintf("	} else if item, ok := rawResp.Choices[%q]; ok {", q.JSONField))
 				g.P(fmt.Sprintf("		decisions.%s = item.Choice", q.GoField))
 				g.P("	}")
 			case model.TypeNoul:
-				g.P(fmt.Sprintf("	if item, ok := rawResp.Nouls[%q]; ok {", q.JSONField))
+				g.P(fmt.Sprintf("	if item, ok := rawResp.Answers[%q]; ok && item.Noul != nil {", q.JSONField))
+				g.P("		switch v := item.Noul.(type) {")
+				g.P("		case bool:")
+				g.P(fmt.Sprintf("			decisions.%s = v", q.GoField))
+				g.P("		case float64:")
+				g.P(fmt.Sprintf("			decisions.%s = v >= 0.5", q.GoField))
+				g.P("		}")
+				g.P(fmt.Sprintf("	} else if item, ok := rawResp.Nouls[%q]; ok {", q.JSONField))
 				g.P(fmt.Sprintf("		decisions.%s = item.Result", q.GoField))
 				g.P("	}")
 			case model.TypeScore:
-				g.P(fmt.Sprintf("	if item, ok := rawResp.Scores[%q]; ok {", q.JSONField))
+				g.P(fmt.Sprintf("	if item, ok := rawResp.Answers[%q]; ok && item.Score != 0 {", q.JSONField))
+				g.P(fmt.Sprintf("		decisions.%s = item.Score", q.GoField))
+				g.P(fmt.Sprintf("	} else if item, ok := rawResp.Scores[%q]; ok {", q.JSONField))
 				g.P(fmt.Sprintf("		decisions.%s = item.Score", q.GoField))
 				g.P("	}")
 			}

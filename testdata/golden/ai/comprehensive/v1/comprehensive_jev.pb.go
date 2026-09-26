@@ -72,6 +72,11 @@ func (c *MetadataJevClient) Evaluate(ctx context.Context, state any) (*MetadataJ
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -86,7 +91,9 @@ func (c *MetadataJevClient) Evaluate(ctx context.Context, state any) (*MetadataJ
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &MetadataJevDecisions{}
-	if item, ok := rawResp.Scores["version"]; ok {
+	if item, ok := rawResp.Answers["version"]; ok && item.Score != 0 {
+		decisions.Version = item.Score
+	} else if item, ok := rawResp.Scores["version"]; ok {
 		decisions.Version = item.Score
 	}
 	return decisions, nil
@@ -209,6 +216,11 @@ func (c *ComprehensiveRecordJevClient) Evaluate(ctx context.Context, state any) 
 		return nil, fmt.Errorf("Jev API returned error status %d: %s", resp.StatusCode, string(b))
 	}
 	var rawResp struct {
+		Answers map[string]struct {
+			Choice string  `json:"choice"`
+			Noul   any     `json:"noul"`
+			Score  float64 `json:"score"`
+		} `json:"answers"`
 		Choices map[string]struct {
 			Choice string `json:"choice"`
 		} `json:"choices"`
@@ -223,31 +235,59 @@ func (c *ComprehensiveRecordJevClient) Evaluate(ctx context.Context, state any) 
 		return nil, fmt.Errorf("failed to decode Jev response: %w", err)
 	}
 	decisions := &ComprehensiveRecordJevDecisions{}
-	if item, ok := rawResp.Scores["scoreInt"]; ok {
+	if item, ok := rawResp.Answers["scoreInt"]; ok && item.Score != 0 {
+		decisions.ScoreInt = item.Score
+	} else if item, ok := rawResp.Scores["scoreInt"]; ok {
 		decisions.ScoreInt = item.Score
 	}
-	if item, ok := rawResp.Scores["bigCount"]; ok {
+	if item, ok := rawResp.Answers["bigCount"]; ok && item.Score != 0 {
+		decisions.BigCount = item.Score
+	} else if item, ok := rawResp.Scores["bigCount"]; ok {
 		decisions.BigCount = item.Score
 	}
-	if item, ok := rawResp.Scores["ratio"]; ok {
+	if item, ok := rawResp.Answers["ratio"]; ok && item.Score != 0 {
+		decisions.Ratio = item.Score
+	} else if item, ok := rawResp.Scores["ratio"]; ok {
 		decisions.Ratio = item.Score
 	}
-	if item, ok := rawResp.Scores["latitude"]; ok {
+	if item, ok := rawResp.Answers["latitude"]; ok && item.Score != 0 {
+		decisions.Latitude = item.Score
+	} else if item, ok := rawResp.Scores["latitude"]; ok {
 		decisions.Latitude = item.Score
 	}
-	if item, ok := rawResp.Nouls["isEnabled"]; ok {
+	if item, ok := rawResp.Answers["isEnabled"]; ok && item.Noul != nil {
+		switch v := item.Noul.(type) {
+		case bool:
+			decisions.IsEnabled = v
+		case float64:
+			decisions.IsEnabled = v >= 0.5
+		}
+	} else if item, ok := rawResp.Nouls["isEnabled"]; ok {
 		decisions.IsEnabled = item.Result
 	}
-	if item, ok := rawResp.Choices["status"]; ok {
+	if item, ok := rawResp.Answers["status"]; ok && item.Choice != "" {
+		decisions.Status = item.Choice
+	} else if item, ok := rawResp.Choices["status"]; ok {
 		decisions.Status = item.Choice
 	}
-	if item, ok := rawResp.Choices["payload"]; ok {
+	if item, ok := rawResp.Answers["payload"]; ok && item.Choice != "" {
+		decisions.Payload = item.Choice
+	} else if item, ok := rawResp.Choices["payload"]; ok {
 		decisions.Payload = item.Choice
 	}
-	if item, ok := rawResp.Nouls["churnRisk"]; ok {
+	if item, ok := rawResp.Answers["churnRisk"]; ok && item.Noul != nil {
+		switch v := item.Noul.(type) {
+		case bool:
+			decisions.ChurnRisk = v
+		case float64:
+			decisions.ChurnRisk = v >= 0.5
+		}
+	} else if item, ok := rawResp.Nouls["churnRisk"]; ok {
 		decisions.ChurnRisk = item.Result
 	}
-	if item, ok := rawResp.Choices["accountTier"]; ok {
+	if item, ok := rawResp.Answers["accountTier"]; ok && item.Choice != "" {
+		decisions.AccountTier = item.Choice
+	} else if item, ok := rawResp.Choices["accountTier"]; ok {
 		decisions.AccountTier = item.Choice
 	}
 	return decisions, nil

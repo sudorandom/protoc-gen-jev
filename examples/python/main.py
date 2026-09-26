@@ -19,9 +19,15 @@ def main():
     print("==================================================")
 
     api_key = os.getenv("TYPESAFE_API_KEY")
+    custom_endpoint = os.getenv("JEV_ENDPOINT")
     container = None
 
-    if api_key:
+    if custom_endpoint:
+        base_url = custom_endpoint.removesuffix("/v1/systemone").removesuffix("/")
+        print(f"\n[INFO] Using custom Jev/Laya endpoint: {base_url}")
+        sdk_client = TypeSafeClient(api_key=api_key or "local", base_url=base_url)
+        client = IncidentTriageJevClient(client=sdk_client)
+    elif api_key:
         print("\n[INFO] Using live TypeSafe AI Jev SDK with TYPESAFE_API_KEY")
         client = IncidentTriageJevClient(api_key=api_key)
     else:
