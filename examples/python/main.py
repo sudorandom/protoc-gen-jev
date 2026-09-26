@@ -13,39 +13,6 @@ from incident.v1.incident_jev import IncidentTriageJevClient
 from typesafe_sdk import TypeSafeClient
 
 
-class MockTypeSafeClient:
-    """Offline mock client simulating Jev System One responses when Docker is unavailable."""
-
-    def system_one(self, state, questions):
-        class MockChoice:
-            def __init__(self, val):
-                self.choice = val
-
-        class MockNoul:
-            def __init__(self, val):
-                self.result = val
-
-        class MockScore:
-            def __init__(self, val):
-                self.score = val
-
-        class MockResp:
-            choices = {
-                "routing_target": MockChoice("oncall_engineer"),
-                "priority": MockChoice("PRIORITY_LEVEL_HIGH"),
-                "complianceClassification": MockChoice("INTERNAL_CONFIDENTIAL"),
-            }
-            nouls = {
-                "requiresImmediatePaging": MockNoul(True),
-            }
-            scores = {
-                "urgencyRating": MockScore(4),
-                "blastRadiusPercentage": MockScore(45.0),
-            }
-
-        return MockResp()
-
-
 def main():
     print("==================================================")
     print("  protoc-gen-jev: Python Client End-to-End Example")
@@ -58,29 +25,25 @@ def main():
         print("\n[INFO] Using live TypeSafe AI Jev SDK with TYPESAFE_API_KEY")
         client = IncidentTriageJevClient(api_key=api_key)
     else:
-        # Try starting FauxRPC Testcontainer with Jev OpenAPI spec
+        # Start FauxRPC Testcontainer with Jev OpenAPI spec
+        from testcontainers.core.container import DockerContainer
+
         abs_openapi = str((Path(__file__).resolve().parents[2] / "testdata" / "openapi").resolve())
-        try:
-            from testcontainers.core.container import DockerContainer
-
-            print("\n[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...")
-            container = (
-                DockerContainer("docker.io/sudorandom/fauxrpc:v0.29.1")
-                .with_volume_mapping(abs_openapi, "/openapi")
-                .with_command(
-                    "run --schema=/openapi/typesafe-jev.yaml --stubs=/openapi/stubs.jev.yaml --addr=0.0.0.0:6660"
-                )
-                .with_exposed_ports(6660)
+        print("\n[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...")
+        container = (
+            DockerContainer("docker.io/sudorandom/fauxrpc:v0.29.1")
+            .with_volume_mapping(abs_openapi, "/openapi")
+            .with_command(
+                "run --schema=/openapi/typesafe-jev.yaml --stubs=/openapi/stubs.jev.yaml --addr=0.0.0.0:6660"
             )
-            container.start()
-            port = container.get_exposed_port(6660)
-            print(f"[INFO] FauxRPC mock server running on port {port}")
+            .with_exposed_ports(6660)
+        )
+        container.start()
+        port = container.get_exposed_port(6660)
+        print(f"[INFO] FauxRPC mock server running on port {port}")
 
-            sdk_client = TypeSafeClient(api_key="mock", base_url=f"http://localhost:{port}")
-            client = IncidentTriageJevClient(client=sdk_client)
-        except Exception as err:
-            print(f"\n[INFO] Testcontainers unavailable ({err}), falling back to in-memory mock...")
-            client = IncidentTriageJevClient(client=MockTypeSafeClient())
+        sdk_client = TypeSafeClient(api_key="mock", base_url=f"http://localhost:{port}")
+        client = IncidentTriageJevClient(client=sdk_client)
 
     try:
         # 1. Inspect generated questions

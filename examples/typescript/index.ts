@@ -3,26 +3,6 @@ import { GenericContainer, Wait } from "testcontainers";
 import path from "path";
 import { IncidentTriageJevClient } from "../gen/jev/incident/v1/incident_jev.js";
 
-// MockTypeSafeClient simulates Jev responses when running offline without an API key or Docker.
-class MockTypeSafeClient {
-  async systemOne(_params: { state: any; questions: Record<string, any> }): Promise<any> {
-    return {
-      choices: {
-        routing_target: { choice: "oncall_engineer" },
-        priority: { choice: "PRIORITY_LEVEL_HIGH" },
-        complianceClassification: { choice: "INTERNAL_CONFIDENTIAL" },
-      },
-      nouls: {
-        requiresImmediatePaging: { result: true },
-      },
-      scores: {
-        urgencyRating: { score: 4 },
-        blastRadiusPercentage: { score: 45.0 },
-      },
-    };
-  }
-}
-
 async function main() {
   console.log("==================================================");
   console.log("  protoc-gen-jev: TypeScript Client End-to-End Example");
@@ -36,31 +16,23 @@ async function main() {
     console.log("\n[INFO] Using live TypeSafe AI Jev SDK with TYPESAFE_API_KEY");
     client = new IncidentTriageJevClient();
   } else {
-    // Check if Docker/Testcontainers is available
     const absSchemaDir = path.resolve(__dirname, "../../testdata/openapi");
-    try {
+    console.log("\n[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...");
+    container = await new GenericContainer("docker.io/sudorandom/fauxrpc:v0.29.1")
+      .withBindMounts([{ source: absSchemaDir, target: "/openapi" }])
+      .withCommand(["run", "--schema=/openapi/typesafe-jev.yaml", "--stubs=/openapi/stubs.jev.yaml", "--addr=0.0.0.0:6660"])
+      .withExposedPorts(6660)
+      .withWaitStrategy(Wait.forHttp("/fauxrpc/openapi-docs/", 6660))
+      .start();
 
+    const port = container.getMappedPort(6660);
+    console.log(`[INFO] FauxRPC mock server running on port ${port}`);
 
-      console.log("\n[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...");
-      container = await new GenericContainer("docker.io/sudorandom/fauxrpc:v0.29.1")
-        .withBindMounts([{ source: absSchemaDir, target: "/openapi" }])
-        .withCommand(["run", "--schema=/openapi/typesafe-jev.yaml", "--stubs=/openapi/stubs.jev.yaml", "--addr=0.0.0.0:6660"])
-        .withExposedPorts(6660)
-        .withWaitStrategy(Wait.forHttp("/fauxrpc/openapi-docs/", 6660))
-        .start();
-
-      const port = container.getMappedPort(6660);
-      console.log(`[INFO] FauxRPC mock server running on port ${port}`);
-
-      const sdkClient = new TypeSafeClient({
-        apiKey: "mock-api-key",
-        baseURL: `http://localhost:${port}`,
-      });
-      client = new IncidentTriageJevClient(sdkClient);
-    } catch (err: any) {
-      console.log(`\n[INFO] Testcontainers unavailable (${err.message}), falling back to in-memory mock...`);
-      client = new IncidentTriageJevClient(new MockTypeSafeClient() as unknown as TypeSafeClient);
-    }
+    const sdkClient = new TypeSafeClient({
+      apiKey: "mock-api-key",
+      baseURL: `http://localhost:${port}`,
+    });
+    client = new IncidentTriageJevClient(sdkClient);
   }
 
   try {

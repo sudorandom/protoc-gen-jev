@@ -4,8 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,81 +21,57 @@ func main() {
 
 	apiKey := os.Getenv("TYPESAFE_API_KEY")
 	var container testcontainers.Container
-	var mockServer *httptest.Server
 
 	client := incidentv1.NewIncidentTriageJevClient(apiKey)
 
 	if apiKey == "" {
 		ctx := context.Background()
 
-
-
 		absSchemaDir, err := filepath.Abs("testdata/openapi")
-		if err == nil {
-			fmt.Println("\n[INFO] TYPESAFE_API_KEY not set in environment.")
-			fmt.Println("[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...")
+		if err != nil {
+			log.Fatalf("failed to locate openapi schema: %v", err)
+		}
+		fmt.Println("\n[INFO] TYPESAFE_API_KEY not set in environment.")
+		fmt.Println("[INFO] Starting FauxRPC Testcontainer with Jev OpenAPI spec...")
 
-			req := testcontainers.ContainerRequest{
-				Image:        "docker.io/sudorandom/fauxrpc:v0.29.1",
-				ExposedPorts: []string{"6660/tcp"},
-				Cmd: []string{
-					"run",
-					"--schema=/openapi/typesafe-jev.yaml",
-					"--stubs=/openapi/stubs.jev.yaml",
-					"--addr=0.0.0.0:6660",
+		req := testcontainers.ContainerRequest{
+			Image:        "docker.io/sudorandom/fauxrpc:v0.29.1",
+			ExposedPorts: []string{"6660/tcp"},
+			Cmd: []string{
+				"run",
+				"--schema=/openapi/typesafe-jev.yaml",
+				"--stubs=/openapi/stubs.jev.yaml",
+				"--addr=0.0.0.0:6660",
+			},
+			Files: []testcontainers.ContainerFile{
+				{
+					HostFilePath:      filepath.Join(absSchemaDir, "typesafe-jev.yaml"),
+					ContainerFilePath: "/openapi/typesafe-jev.yaml",
+					FileMode:          0644,
 				},
-				Files: []testcontainers.ContainerFile{
-					{
-						HostFilePath:      filepath.Join(absSchemaDir, "typesafe-jev.yaml"),
-						ContainerFilePath: "/openapi/typesafe-jev.yaml",
-						FileMode:          0644,
-					},
-					{
-						HostFilePath:      filepath.Join(absSchemaDir, "stubs.jev.yaml"),
-						ContainerFilePath: "/openapi/stubs.jev.yaml",
-						FileMode:          0644,
-					},
+				{
+					HostFilePath:      filepath.Join(absSchemaDir, "stubs.jev.yaml"),
+					ContainerFilePath: "/openapi/stubs.jev.yaml",
+					FileMode:          0644,
 				},
-				WaitingFor: wait.ForHTTP("/fauxrpc/openapi-docs/").WithPort("6660/tcp").WithStartupTimeout(20 * time.Second),
-			}
-
-			c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-				ContainerRequest: req,
-				Started:          true,
-			})
-			if err == nil {
-				container = c
-				endpoint, err := container.PortEndpoint(ctx, "6660/tcp", "http")
-				if err == nil {
-					fmt.Printf("[INFO] FauxRPC mock server running at %s\n", endpoint)
-					client.Endpoint = fmt.Sprintf("%s/v1/systemone", endpoint)
-				}
-			}
+			},
+			WaitingFor: wait.ForHTTP("/fauxrpc/openapi-docs/").WithPort("6660/tcp").WithStartupTimeout(20 * time.Second),
 		}
 
-		if client.Endpoint == incidentv1.DefaultJevEndpoint {
-			fmt.Println("[INFO] Testcontainers unavailable, falling back to local httptest server...")
-			mockServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				resp := map[string]any{
-					"choices": map[string]any{
-						"routing_target":           map[string]any{"choice": "oncall_engineer"},
-						"priority":                 map[string]any{"choice": "PRIORITY_LEVEL_HIGH"},
-						"complianceClassification": map[string]any{"choice": "INTERNAL_CONFIDENTIAL"},
-					},
-					"nouls": map[string]any{
-						"requiresImmediatePaging": map[string]any{"result": true},
-					},
-					"scores": map[string]any{
-						"urgencyRating":         map[string]any{"score": 4},
-						"blastRadiusPercentage": map[string]any{"score": 45.0},
-					},
-				}
-				_ = json.NewEncoder(w).Encode(resp)
-			}))
-			defer mockServer.Close()
-			client.Endpoint = mockServer.URL
-			client.HTTPClient = mockServer.Client()
+		c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: req,
+			Started:          true,
+		})
+		if err != nil {
+			log.Fatalf("failed to start fauxrpc testcontainer: %v", err)
 		}
+		container = c
+		endpoint, err := container.PortEndpoint(ctx, "6660/tcp", "http")
+		if err != nil {
+			log.Fatalf("failed to get fauxrpc container endpoint: %v", err)
+		}
+		fmt.Printf("[INFO] FauxRPC mock server running at %s\n", endpoint)
+		client.Endpoint = fmt.Sprintf("%s/v1/systemone", endpoint)
 	} else {
 		fmt.Println("\n[INFO] Using live TypeSafe AI Jev API: https://api.typesafe.ai/v1/systemone")
 	}
