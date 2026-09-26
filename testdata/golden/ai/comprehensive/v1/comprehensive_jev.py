@@ -5,11 +5,10 @@ import json
 import math
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
-from google.protobuf.message import Message
-from google.protobuf.json_format import MessageToDict, ParseDict
+from protobuf import Message
 from typesafe_sdk import TypeSafeClient, Choice, Noul, Score
-import ai.comprehensive.v1.comprehensive_pb2 as _pb0
-import ai.comprehensive.v1.comprehensive_pb2 as _pb1
+import jev.ai.comprehensive.v1.comprehensive_pb as _pb0
+import jev.ai.comprehensive.v1.comprehensive_pb as _pb1
 _T = TypeVar("_T", bound=Message)
 
 @dataclass(frozen=True)
@@ -98,8 +97,8 @@ class MetadataJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb0.Metadata]:
         rules = json.loads("[{\"name\":\"version\",\"type\":\"score\",\"instructions\":\"Evaluate version\",\"field\":\"version\",\"kind\":\"int32\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb0.Metadata, ParseDict(_map_response(response, rules), _pb0.Metadata()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb0.Metadata.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb0.Metadata]:
         return [self.evaluate(req) for req in reqs]
@@ -119,8 +118,8 @@ class ComprehensiveRecordJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb1.ComprehensiveRecord]:
         rules = json.loads("[{\"name\":\"scoreInt\",\"type\":\"score\",\"instructions\":\"--- Numeric validation variants ---\",\"field\":\"score_int\",\"kind\":\"int32\",\"levels\":[{\"value\":1,\"description\":\"Minimum score\"},{\"value\":50,\"description\":\"Average score\"},{\"value\":100,\"description\":\"Maximum score\"}],\"threshold\":0},{\"name\":\"bigCount\",\"type\":\"score\",\"instructions\":\"Evaluate bigCount\",\"field\":\"big_count\",\"kind\":\"int64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"ratio\",\"type\":\"score\",\"instructions\":\"Evaluate ratio\",\"field\":\"ratio\",\"kind\":\"float32\",\"levels\":[{\"value\":0,\"description\":\"Zero ratio\"},{\"value\":0.5,\"description\":\"Half ratio\"},{\"value\":1,\"description\":\"Full ratio\"}],\"threshold\":0},{\"name\":\"latitude\",\"type\":\"score\",\"instructions\":\"Evaluate latitude\",\"field\":\"latitude\",\"kind\":\"float64\",\"levels\":[{\"value\":-90,\"description\":\"South Pole\"},{\"value\":0,\"description\":\"Equator\"},{\"value\":90,\"description\":\"North Pole\"}],\"threshold\":0},{\"name\":\"isEnabled\",\"type\":\"noul\",\"instructions\":\"--- Boolean \\u0026 Enum ---\",\"field\":\"is_enabled\",\"kind\":\"bool\",\"threshold\":0.5},{\"name\":\"status\",\"type\":\"choice\",\"instructions\":\"Evaluate status\",\"field\":\"status\",\"kind\":\"enum\",\"choices\":{\"STATUS_ACTIVE\":\"\",\"STATUS_ARCHIVED\":\"\",\"STATUS_PAUSED\":\"\"},\"threshold\":0},{\"name\":\"payload\",\"type\":\"choice\",\"instructions\":\"--- Oneof ---\",\"field\":\"payload\",\"kind\":\"oneof\",\"choices\":{\"binary_payload\":\"binary_payload\",\"text_payload\":\"text_payload\"},\"threshold\":0,\"oneof\":{\"binary_payload\":\"bytes\",\"text_payload\":\"string\"}},{\"name\":\"churnRisk\",\"type\":\"noul\",\"instructions\":\"Custom Jev instruction: assess customer cancellation intent\",\"field\":\"churn_risk\",\"kind\":\"bool\",\"threshold\":0.5},{\"name\":\"accountTier\",\"type\":\"choice\",\"instructions\":\"Discrete string choices via Jev options\",\"field\":\"account_tier\",\"kind\":\"string\",\"choices\":{\"TIER_ENTERPRISE\":\"\",\"TIER_PREMIUM\":\"\",\"TIER_STANDARD\":\"\"},\"threshold\":0}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb1.ComprehensiveRecord, ParseDict(_map_response(response, rules), _pb1.ComprehensiveRecord()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb1.ComprehensiveRecord.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb1.ComprehensiveRecord]:
         return [self.evaluate(req) for req in reqs]

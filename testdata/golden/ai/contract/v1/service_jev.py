@@ -5,15 +5,14 @@ import json
 import math
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
-from google.protobuf.message import Message
-from google.protobuf.json_format import MessageToDict, ParseDict
+from protobuf import Message
 from typesafe_sdk import TypeSafeClient, Choice, Noul, Score
-import ai.contract.v1.contract_pb2 as _pb0
-import ai.contract.v1.contract_pb2 as _pb1
-import ai.shared.v1.shared_pb2 as _pb2
-import ai.shared.v1.shared_pb2 as _pb3
-import ai.contract.v1.contract_pb2 as _pb4
-import ai.contract.v1.contract_pb2 as _pb5
+import jev.ai.contract.v1.contract_pb as _pb0
+import jev.ai.contract.v1.contract_pb as _pb1
+import jev.ai.shared.v1.shared_pb as _pb2
+import jev.ai.shared.v1.shared_pb as _pb3
+import jev.ai.contract.v1.contract_pb as _pb4
+import jev.ai.contract.v1.contract_pb as _pb5
 _T = TypeVar("_T", bound=Message)
 
 @dataclass(frozen=True)
@@ -102,8 +101,8 @@ class ContractServiceClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: _pb0.EvaluateRequest) -> Evaluation[_pb1.EvaluateResponse]:
         rules = json.loads("[{\"name\":\"flag\",\"type\":\"noul\",\"instructions\":\"Evaluate flag\",\"field\":\"flag\",\"kind\":\"bool\",\"threshold\":0},{\"name\":\"rating\",\"type\":\"score\",\"instructions\":\"Evaluate rating\",\"field\":\"rating\",\"kind\":\"int32\",\"levels\":[{\"value\":-3,\"description\":\"Low\"},{\"value\":-2,\"description\":\"High\"}],\"threshold\":0},{\"name\":\"count\",\"type\":\"score\",\"instructions\":\"Evaluate count\",\"field\":\"count\",\"kind\":\"uint32\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"bigCount\",\"type\":\"score\",\"instructions\":\"Evaluate bigCount\",\"field\":\"big_count\",\"kind\":\"int64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"bigUnsigned\",\"type\":\"score\",\"instructions\":\"Evaluate bigUnsigned\",\"field\":\"big_unsigned\",\"kind\":\"uint64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"fixedCount\",\"type\":\"score\",\"instructions\":\"Evaluate fixedCount\",\"field\":\"fixed_count\",\"kind\":\"uint32\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"signedFixedCount\",\"type\":\"score\",\"instructions\":\"Evaluate signedFixedCount\",\"field\":\"signed_fixed_count\",\"kind\":\"int64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"risk-flag\",\"type\":\"noul\",\"instructions\":\"Evaluate risk-flag\",\"field\":\"risk\",\"kind\":\"bool\",\"threshold\":0.5},{\"name\":\"status\",\"type\":\"choice\",\"instructions\":\"Evaluate status\",\"field\":\"status\",\"kind\":\"enum\",\"choices\":{\"STATUS_BLOCKED\":\"\",\"STATUS_READY\":\"\"},\"threshold\":0},{\"name\":\"label\",\"type\":\"choice\",\"instructions\":\"Evaluate label\",\"field\":\"label\",\"kind\":\"string\",\"choices\":{\"NO\":\"\",\"YES\":\"\"},\"threshold\":0},{\"name\":\"boundary\",\"type\":\"score\",\"instructions\":\"Evaluate boundary\",\"field\":\"boundary\",\"kind\":\"int64\",\"levels\":[{\"value\":9007199254740990,\"description\":\"Low\"},{\"value\":9007199254740991,\"description\":\"High\"}],\"threshold\":0},{\"name\":\"route\",\"type\":\"choice\",\"instructions\":\"Select route variant\",\"field\":\"route\",\"kind\":\"oneof\",\"choices\":{\"binary\":\"binary\",\"email\":\"email\"},\"threshold\":0,\"oneof\":{\"binary\":\"bytes\",\"email\":\"string\"}}]")
-        response = self.client.system_one(state=MessageToDict(req), questions=_questions(rules))
-        value = cast(_pb1.EvaluateResponse, ParseDict(_map_response(response, rules), _pb1.EvaluateResponse()))
+        response = self.client.system_one(state=json.loads(req.to_json()), questions=_questions(rules))
+        value = _pb1.EvaluateResponse.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[_pb0.EvaluateRequest]) -> list[_pb1.EvaluateResponse]:
         return [self.evaluate(req) for req in reqs]
@@ -113,8 +112,8 @@ class ContractServiceClient:
         return self.external_detailed(req).value
     def external_detailed(self, req: _pb2.ExternalRequest) -> Evaluation[_pb3.ExternalResponse]:
         rules = json.loads("[{\"name\":\"accepted\",\"type\":\"noul\",\"instructions\":\"Evaluate accepted\",\"field\":\"accepted\",\"kind\":\"bool\",\"threshold\":0.5}]")
-        response = self.client.system_one(state=MessageToDict(req), questions=_questions(rules))
-        value = cast(_pb3.ExternalResponse, ParseDict(_map_response(response, rules), _pb3.ExternalResponse()))
+        response = self.client.system_one(state=json.loads(req.to_json()), questions=_questions(rules))
+        value = _pb3.ExternalResponse.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_external(self, reqs: list[_pb2.ExternalRequest]) -> list[_pb3.ExternalResponse]:
         return [self.external(req) for req in reqs]
@@ -124,8 +123,8 @@ class ContractServiceClient:
         return self.nested_detailed(req).value
     def nested_detailed(self, req: _pb4.Container.NestedRequest) -> Evaluation[_pb5.Container.NestedResponse]:
         rules = json.loads("[{\"name\":\"accepted\",\"type\":\"noul\",\"instructions\":\"Evaluate accepted\",\"field\":\"accepted\",\"kind\":\"bool\",\"threshold\":0.5}]")
-        response = self.client.system_one(state=MessageToDict(req), questions=_questions(rules))
-        value = cast(_pb5.Container.NestedResponse, ParseDict(_map_response(response, rules), _pb5.Container.NestedResponse()))
+        response = self.client.system_one(state=json.loads(req.to_json()), questions=_questions(rules))
+        value = _pb5.Container.NestedResponse.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_nested(self, reqs: list[_pb4.Container.NestedRequest]) -> list[_pb5.Container.NestedResponse]:
         return [self.nested(req) for req in reqs]

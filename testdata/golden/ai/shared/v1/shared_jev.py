@@ -5,10 +5,9 @@ import json
 import math
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
-from google.protobuf.message import Message
-from google.protobuf.json_format import MessageToDict, ParseDict
+from protobuf import Message
 from typesafe_sdk import TypeSafeClient, Choice, Noul, Score
-import ai.shared.v1.shared_pb2 as _pb0
+import jev.ai.shared.v1.shared_pb as _pb0
 _T = TypeVar("_T", bound=Message)
 
 @dataclass(frozen=True)
@@ -97,8 +96,8 @@ class ExternalResponseJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb0.ExternalResponse]:
         rules = json.loads("[{\"name\":\"accepted\",\"type\":\"noul\",\"instructions\":\"Evaluate accepted\",\"field\":\"accepted\",\"kind\":\"bool\",\"threshold\":0.5}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb0.ExternalResponse, ParseDict(_map_response(response, rules), _pb0.ExternalResponse()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb0.ExternalResponse.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb0.ExternalResponse]:
         return [self.evaluate(req) for req in reqs]

@@ -5,12 +5,11 @@ import json
 import math
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
-from google.protobuf.message import Message
-from google.protobuf.json_format import MessageToDict, ParseDict
+from protobuf import Message
 from typesafe_sdk import TypeSafeClient, Choice, Noul, Score
-import ai.contract.v1.contract_pb2 as _pb0
-import ai.contract.v1.contract_pb2 as _pb1
-import ai.contract.v1.contract_pb2 as _pb2
+import jev.ai.contract.v1.contract_pb as _pb0
+import jev.ai.contract.v1.contract_pb as _pb1
+import jev.ai.contract.v1.contract_pb as _pb2
 _T = TypeVar("_T", bound=Message)
 
 @dataclass(frozen=True)
@@ -99,8 +98,8 @@ class EvaluateRequestJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb0.EvaluateRequest]:
         rules = json.loads("[{\"name\":\"inputCount\",\"type\":\"score\",\"instructions\":\"Evaluate inputCount\",\"field\":\"input_count\",\"kind\":\"uint64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb0.EvaluateRequest, ParseDict(_map_response(response, rules), _pb0.EvaluateRequest()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb0.EvaluateRequest.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb0.EvaluateRequest]:
         return [self.evaluate(req) for req in reqs]
@@ -120,8 +119,8 @@ class EvaluateResponseJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb1.EvaluateResponse]:
         rules = json.loads("[{\"name\":\"flag\",\"type\":\"noul\",\"instructions\":\"Evaluate flag\",\"field\":\"flag\",\"kind\":\"bool\",\"threshold\":0},{\"name\":\"rating\",\"type\":\"score\",\"instructions\":\"Evaluate rating\",\"field\":\"rating\",\"kind\":\"int32\",\"levels\":[{\"value\":-3,\"description\":\"Low\"},{\"value\":-2,\"description\":\"High\"}],\"threshold\":0},{\"name\":\"count\",\"type\":\"score\",\"instructions\":\"Evaluate count\",\"field\":\"count\",\"kind\":\"uint32\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"bigCount\",\"type\":\"score\",\"instructions\":\"Evaluate bigCount\",\"field\":\"big_count\",\"kind\":\"int64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"bigUnsigned\",\"type\":\"score\",\"instructions\":\"Evaluate bigUnsigned\",\"field\":\"big_unsigned\",\"kind\":\"uint64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"fixedCount\",\"type\":\"score\",\"instructions\":\"Evaluate fixedCount\",\"field\":\"fixed_count\",\"kind\":\"uint32\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"signedFixedCount\",\"type\":\"score\",\"instructions\":\"Evaluate signedFixedCount\",\"field\":\"signed_fixed_count\",\"kind\":\"int64\",\"levels\":[{\"value\":1,\"description\":\"Very low extent or intensity\"},{\"value\":2,\"description\":\"Low extent or intensity\"},{\"value\":3,\"description\":\"Moderate extent or intensity\"},{\"value\":4,\"description\":\"High extent or intensity\"},{\"value\":5,\"description\":\"Very high extent or intensity\"}],\"threshold\":0},{\"name\":\"risk-flag\",\"type\":\"noul\",\"instructions\":\"Evaluate risk-flag\",\"field\":\"risk\",\"kind\":\"bool\",\"threshold\":0.5},{\"name\":\"status\",\"type\":\"choice\",\"instructions\":\"Evaluate status\",\"field\":\"status\",\"kind\":\"enum\",\"choices\":{\"STATUS_BLOCKED\":\"\",\"STATUS_READY\":\"\"},\"threshold\":0},{\"name\":\"label\",\"type\":\"choice\",\"instructions\":\"Evaluate label\",\"field\":\"label\",\"kind\":\"string\",\"choices\":{\"NO\":\"\",\"YES\":\"\"},\"threshold\":0},{\"name\":\"boundary\",\"type\":\"score\",\"instructions\":\"Evaluate boundary\",\"field\":\"boundary\",\"kind\":\"int64\",\"levels\":[{\"value\":9007199254740990,\"description\":\"Low\"},{\"value\":9007199254740991,\"description\":\"High\"}],\"threshold\":0},{\"name\":\"route\",\"type\":\"choice\",\"instructions\":\"Select route variant\",\"field\":\"route\",\"kind\":\"oneof\",\"choices\":{\"binary\":\"binary\",\"email\":\"email\"},\"threshold\":0,\"oneof\":{\"binary\":\"bytes\",\"email\":\"string\"}}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb1.EvaluateResponse, ParseDict(_map_response(response, rules), _pb1.EvaluateResponse()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb1.EvaluateResponse.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb1.EvaluateResponse]:
         return [self.evaluate(req) for req in reqs]
@@ -141,8 +140,8 @@ class Container_NestedResponseJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb2.Container.NestedResponse]:
         rules = json.loads("[{\"name\":\"accepted\",\"type\":\"noul\",\"instructions\":\"Evaluate accepted\",\"field\":\"accepted\",\"kind\":\"bool\",\"threshold\":0.5}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb2.Container.NestedResponse, ParseDict(_map_response(response, rules), _pb2.Container.NestedResponse()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb2.Container.NestedResponse.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb2.Container.NestedResponse]:
         return [self.evaluate(req) for req in reqs]

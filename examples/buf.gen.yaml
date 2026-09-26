@@ -12,7 +12,7 @@ plugins:
     out: examples/gen/jev
     opt:
       - target=ts
-  - remote: buf.build/protocolbuffers/python:v29.3
+  - remote: buf.build/bufbuild/py:v0.5.0
     out: examples/gen/jev
   - local: ./protoc-gen-jev
     out: examples/gen/jev

@@ -11,7 +11,7 @@ plugins:
     out: gen/jev
     opt:
       - target=ts
-  - remote: buf.build/protocolbuffers/python:v29.3
+  - remote: buf.build/bufbuild/py:v0.5.0
     out: gen/jev
   - local: ./protoc-gen-jev
     out: gen/jev

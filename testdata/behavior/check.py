@@ -4,12 +4,11 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-sys.path.insert(0, str(Path("gen/jev").resolve()))
-from google.protobuf.json_format import MessageToDict
+sys.path.insert(0, str(Path("gen").resolve()))
 from typesafe_sdk import TypeSafeClient
-from ai.contract.v1.service_jev import ContractServiceClient
-from ai.contract.v1.contract_pb2 import EvaluateRequest, Container
-from ai.shared.v1.shared_pb2 import ExternalRequest
+from jev.ai.contract.v1.service_jev import ContractServiceClient
+from jev.ai.contract.v1.contract_pb import EvaluateRequest, Container
+from jev.ai.shared.v1.shared_pb import ExternalRequest
 
 class Fake:
     def __init__(self, response: dict[str, Any], check_state: bool = True):
@@ -30,8 +29,8 @@ for tc in cases:
         assert tc.get("error"), tc["name"]
         continue
     assert not tc.get("error"), tc["name"]
-    assert MessageToDict(result.value) == tc["expected"], (tc["name"], result.value)
-    assert result.value.HasField("flag") and result.value.HasField("rating")
+    assert json.loads(result.value.to_json()) == tc["expected"], (tc["name"], result.value)
+    assert result.value.has_field("flag") and result.value.has_field("rating")
     assert result.response["model"] == "test-model"
     assert result.response["usage"] == tc["response"]["usage"]
 

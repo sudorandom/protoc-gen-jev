@@ -5,13 +5,12 @@ import json
 import math
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
-from google.protobuf.message import Message
-from google.protobuf.json_format import MessageToDict, ParseDict
+from protobuf import Message
 from typesafe_sdk import TypeSafeClient, Choice, Noul, Score
-import ai.analysis.v1.analysis_pb2 as _pb0
-import ai.analysis.v1.analysis_pb2 as _pb1
-import ai.analysis.v1.analysis_pb2 as _pb2
-import ai.analysis.v1.analysis_pb2 as _pb3
+import jev.ai.analysis.v1.analysis_pb as _pb0
+import jev.ai.analysis.v1.analysis_pb as _pb1
+import jev.ai.analysis.v1.analysis_pb as _pb2
+import jev.ai.analysis.v1.analysis_pb as _pb3
 _T = TypeVar("_T", bound=Message)
 
 @dataclass(frozen=True)
@@ -100,8 +99,8 @@ class EntityJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb0.Entity]:
         rules = json.loads("[{\"name\":\"relevance\",\"type\":\"score\",\"instructions\":\"Relevance score from 0.0 to 1.0.\",\"field\":\"relevance\",\"kind\":\"float32\",\"levels\":[{\"value\":0,\"description\":\"Not relevant\"},{\"value\":0.5,\"description\":\"Moderately relevant\"},{\"value\":1,\"description\":\"Highly relevant\"}],\"threshold\":0}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb0.Entity, ParseDict(_map_response(response, rules), _pb0.Entity()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb0.Entity.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb0.Entity]:
         return [self.evaluate(req) for req in reqs]
@@ -121,8 +120,8 @@ class NotificationJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb1.Notification]:
         rules = json.loads("[{\"name\":\"channel\",\"type\":\"choice\",\"instructions\":\"Select channel variant\",\"field\":\"channel\",\"kind\":\"oneof\",\"choices\":{\"email\":\"email\",\"slack_channel\":\"slack_channel\",\"webhook_url\":\"webhook_url\"},\"threshold\":0,\"oneof\":{\"email\":\"string\",\"slack_channel\":\"string\",\"webhook_url\":\"string\"}}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb1.Notification, ParseDict(_map_response(response, rules), _pb1.Notification()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb1.Notification.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb1.Notification]:
         return [self.evaluate(req) for req in reqs]
@@ -142,8 +141,8 @@ class ActionItemJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb2.ActionItem]:
         rules = json.loads("[{\"name\":\"priority\",\"type\":\"choice\",\"instructions\":\"Urgency and priority level of the task.\",\"field\":\"priority\",\"kind\":\"enum\",\"choices\":{\"PRIORITY_HIGH\":\"\",\"PRIORITY_LOW\":\"\",\"PRIORITY_MEDIUM\":\"\",\"PRIORITY_URGENT\":\"\"},\"threshold\":0},{\"name\":\"requiresImmediateAction\",\"type\":\"noul\",\"instructions\":\"Whether this task requires immediate escalation or intervention.\",\"field\":\"requires_immediate_action\",\"kind\":\"bool\",\"threshold\":0.5}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb2.ActionItem, ParseDict(_map_response(response, rules), _pb2.ActionItem()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb2.ActionItem.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb2.ActionItem]:
         return [self.evaluate(req) for req in reqs]
@@ -163,8 +162,8 @@ class AnalysisReportJevClient:
         return self.evaluate_detailed(req).value
     def evaluate_detailed(self, req: Message | dict[str, Any] | list[Any] | str) -> Evaluation[_pb3.AnalysisReport]:
         rules = json.loads("[{\"name\":\"sentiment\",\"type\":\"choice\",\"instructions\":\"Overall sentiment detected in the text.\",\"field\":\"sentiment\",\"kind\":\"enum\",\"choices\":{\"SENTIMENT_NEGATIVE\":\"\",\"SENTIMENT_NEUTRAL\":\"\",\"SENTIMENT_POSITIVE\":\"\"},\"threshold\":0},{\"name\":\"confidenceScore\",\"type\":\"score\",\"instructions\":\"Confidence score of the overall analysis between 0.0 and 1.0.\",\"field\":\"confidence_score\",\"kind\":\"float32\",\"levels\":[{\"value\":0,\"description\":\"Low confidence\"},{\"value\":0.5,\"description\":\"Medium confidence\"},{\"value\":1,\"description\":\"High confidence\"}],\"threshold\":0}]")
-        response = self.client.system_one(state=MessageToDict(req) if isinstance(req, Message) else req, questions=_questions(rules))
-        value = cast(_pb3.AnalysisReport, ParseDict(_map_response(response, rules), _pb3.AnalysisReport()))
+        response = self.client.system_one(state=json.loads(req.to_json()) if isinstance(req, Message) else req, questions=_questions(rules))
+        value = _pb3.AnalysisReport.from_json(json.dumps(_map_response(response, rules)))
         return Evaluation(value=value, response=response)
     def batch_evaluate(self, reqs: list[Message | dict[str, Any] | list[Any] | str]) -> list[_pb3.AnalysisReport]:
         return [self.evaluate(req) for req in reqs]

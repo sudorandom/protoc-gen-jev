@@ -26,6 +26,10 @@ pathspec==1.1.1
     # via mypy
 protobuf==7.36.2
     # via -r examples/python/requirements.txt
+protobuf-py==0.5.0
+    # via -r requirements-dev.in
+protobuf-py-ext==0.5.0
+    # via protobuf-py
 pydantic==2.13.5
     # via typesafe-sdk
 pydantic-core==2.46.5
@@ -38,14 +42,13 @@ truststore==0.10.4
     # via
     #   httpcore2
     #   httpx2
-types-protobuf==7.35.1.20260906
-    # via -r requirements-dev.in
 typesafe-sdk==0.7.1
     # via -r examples/python/requirements.txt
 typing-extensions==4.16.0
     # via
     #   anyio
     #   mypy
+    #   protobuf-py
     #   pydantic
     #   pydantic-core
     #   typesafe-sdk
